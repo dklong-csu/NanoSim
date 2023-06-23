@@ -1,5 +1,5 @@
-#ifndef MEPBM_PARTICLESYSTEM_H
-#define MEPBM_PARTICLESYSTEM_H
+#ifndef NANOSIM_PARTICLESYSTEM_H
+#define NANOSIM_PARTICLESYSTEM_H
 
 #include<vector> // needed to store the list of chemical reactions
 #include<functional> // needed to pass a function as an argument
