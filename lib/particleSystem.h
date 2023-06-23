@@ -61,6 +61,11 @@ namespace NanoSim{
     
     
     
+    /// Prints all of the chemical species and their vector index
+    void printChemicalSpecies();
+
+
+
     /// Prints the chemical reaction system
     void printChemicalReactions();
 
@@ -124,7 +129,7 @@ namespace NanoSim{
 
 
     /// Stores a map of all chemicals species to their indices in vectors
-    std::unordered_map<std::string, int> species_to_index_map;
+    std::unordered_map<std::string, unsigned int> species_to_index_map;
 
 
 
@@ -256,6 +261,66 @@ namespace NanoSim{
   particleSystem<Real>::finalizeReactions(){
     // TODO error handle if already called
 
+    // Need to see if nucleation has any new chemical species to keep vector ordering correct
+    if (has_nucleation){
+      std::vector< std::pair<int, std::string> > reactants = std::get<0>(nucleation_info);
+      std::vector< std::pair<int, std::string> > products = std::get<1>(nucleation_info);
+
+      for (const auto & r : reactants){
+        if (!species_to_index_map.contains(r.second)){
+          species_to_index_map[r.second] = n_species;
+          n_species += 1; // Vector indexes from 0 so increment after
+        }
+      }
+
+      for (const auto & p : products){
+        if (!species_to_index_map.contains(p.second)){
+          species_to_index_map[p.second] = n_species;
+          n_species += 1; // Vector indexes from 0 so increment after
+        }
+      }
+    }
+
+    // Need to see if growth has any new chemical species to keep vector ordering correct
+    if (has_growth){
+      std::vector< std::pair<int, std::string> > reactants = std::get<0>(growth_info);
+      std::vector< std::pair<int, std::string> > products = std::get<1>(growth_info);
+
+      for (const auto & r : reactants){
+        if (!species_to_index_map.contains(r.second)){
+          species_to_index_map[r.second] = n_species;
+          n_species += 1; // Vector indexes from 0 so increment after
+        }
+      }
+
+      for (const auto & p : products){
+        if (!species_to_index_map.contains(p.second)){
+          species_to_index_map[p.second] = n_species;
+          n_species += 1; // Vector indexes from 0 so increment after
+        }
+      }
+    }
+
+    // Need to see if agglomeration has any new chemical species to keep vector ordering correct
+    if (has_agglomeration){
+      std::vector< std::pair<int, std::string> > reactants = std::get<0>(agglomeration_info);
+      std::vector< std::pair<int, std::string> > products = std::get<1>(agglomeration_info);
+
+      for (const auto & r : reactants){
+        if (!species_to_index_map.contains(r.second)){
+          species_to_index_map[r.second] = n_species;
+          n_species += 1; // Vector indexes from 0 so increment after
+        }
+      }
+
+      for (const auto & p : products){
+        if (!species_to_index_map.contains(p.second)){
+          species_to_index_map[p.second] = n_species;
+          n_species += 1; // Vector indexes from 0 so increment after
+        }
+      }
+    }
+
 
     // n_species now indicates the number of non-particle species and no more of these will be added
     // Hence we are free to create the vector indices for the particle species now
@@ -347,6 +412,17 @@ namespace NanoSim{
     
     
     
+  template<typename Real>
+  void
+  particleSystem<Real>::printChemicalSpecies(){
+
+    for (const auto & kv : species_to_index_map){
+      std::cout << kv.first << "  index " << kv.second << "\n";
+    }
+  }
+
+
+
   template<typename Real>
   void
   particleSystem<Real>::printChemicalReactions(){
