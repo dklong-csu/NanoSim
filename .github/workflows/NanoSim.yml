@@ -1,0 +1,36 @@
+name: NanoSim CI test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: install dependencies
+      run: |
+        sudo apt-get install --fix-missing doxygen graphviz libboost-all-dev numdiff -y
+        doxygen --version
+        mkdir sundials
+        cd ./sundials
+        wget https://github.com/LLNL/sundials/releases/download/v5.7.0/sundials-5.7.0.tar.gz
+        tar zxf sundials-5.7.0.tar.gz
+        cd sundials-5.7.0
+        mkdir ./build
+        mkdir ./install
+        cd ./build
+        cmake ../ -DCMAKE_INSTALL_PREFIX=../install
+        make install
+    - name: cmake
+      run: cmake -DSUNDIALS_DIR="$PWD/sundials/sundials-5.7.0/install" -DCMAKE_BUILD_TYPE=release .
+    - name: build
+      run: make
+    - name: ctest
+      run: ctest --output-on-failure -j2
