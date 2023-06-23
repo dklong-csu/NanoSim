@@ -3,6 +3,8 @@ Tests that adding a single reaction constructs the intended reaction and ODE sys
 */
 
 #include "particleSystem.h"
+#include "operationsSUNDenseMatrix.h"
+
 #include <sundials/sundials_nvector.h>
 #include <nvector/nvector_serial.h>
 #include <sundials/sundials_types.h>
@@ -65,13 +67,9 @@ int main(){
 
 
   std::function<int(SUNMatrix,sunindextype,sunindextype,realtype)> matrixInsertAdd = [](SUNMatrix A, sunindextype row, sunindextype col, realtype value){
-    // Specific to SUNMatrixDense shipped with SUNDIALS
-    realtype* A_data = SUNDenseMatrix_Data(A);
-    // Organized as array indexed with [col*n_rows + row] with row and col counting from 0
-    const sunindextype n_rows = SUNDenseMatrix_Rows(A);
-    A_data[col*n_rows + row] = value;
-    return 0;
+    return NanoSim::matrixInsertAdd(A, row, col, value);
   };
+  
   void * user_data = static_cast<void*>(&matrixInsertAdd);
   const int errJ = jac_fcn(0.0, x, x_dot, J, user_data, tmp1, tmp2, tmp3);
   realtype* J_data = SUNDenseMatrix_Data(J);
