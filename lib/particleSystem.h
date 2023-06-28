@@ -8,165 +8,85 @@
 #include<string> // needed to have text descriptions of chemical species
 #include<iostream> // needed to output
 #include<cmath> // needed to raise a number to a power
+#include<cassert> // needed to assert certain conditions for error checking
+#include<stdexcept> // needed for error handling
 
 // includes for SUNDIALS to solve ODEs
 #include <sundials/sundials_nvector.h>
 #include <sundials/sundials_matrix.h>
+#include <sundials/sundials_types.h>
+
+#include "linearAlgebra.h"
 
 namespace NanoSim{
+
+  /**
+   * TODO document
+   * TODO clean up SUNDIALS objects so memory isn't leaked
+   */ 
   template<typename Real>
   class particleSystem {
     public:
-    /// Constructor
 
-
-
-    /// Adds an individual chemical reaction
     void addReaction(const std::vector< std::pair<int,std::string> > & reactants,
       const std::vector< std::pair<int,std::string> > & products,
       const Real reaction_rate);
 
-
-
-    /// Define characteristics of a particle
     void defineParticle(const int fewest_atoms, const int most_atoms, const int largest_agglomeration_size);
 
-
-
-    /// Adds in particle nucleation
     void addNucleation(const std::vector< std::pair<int, std::string> > & reactants,
       const std::vector< std::pair<int, std::string> > & products,
       const Real reaction_rate,
       const int n_particles_created=1);
 
-
-
-    /// Adds in particle growth
     void addGrowth(const std::vector< std::pair<int, std::string> > & reactants,
       const std::vector< std::pair<int, std::string> > & products,
       const std::function<Real(const unsigned int)> & growth_rate_fcn,
       const int particle_size_increase=1);
 
-
-
-    /// Adds in particle agglomeration
     void addAgglomeration(const std::vector< std::pair<int, std::string> > & reactants,
       const std::vector< std::pair<int, std::string> > & products,
       const std::function<Real(const unsigned int, const unsigned int)> & agglomeration_rate_fcn);
 
-
-
-    /// Finalizes chemical system so it is prepared for simulations
     void finalizeReactions();
-    
-    
-    
-    /// Prints all of the chemical species and their vector index
+
     void printChemicalSpecies();
 
-
-
-    /// Prints the chemical reaction system
     void printChemicalReactions();
 
-
-
-    /// Print ODE right hand side equations
-    void printODErhs();
-
-
-
-    /// Print ODE Jacobian equations
-    void printODEJacobian();
-
-
-
-    /// Computes the rhs vector for the ODEs
     std::function<int(Real, N_Vector, N_Vector, void*)>
     composeRHSfunction() const;
 
-    /// Computes the Jacobian for the ODEs
     std::function<int(Real, N_Vector, N_Vector, SUNMatrix, void *, N_Vector, N_Vector, N_Vector)>
     composeJacobianfunction() const;
-    
-    /// Computes the PSD by solving the ODEs
 
-    /// Extracts particles from the PSD vector based on internal indexing
-
-    /// Provides particles sizes corresponding to the same vector indices in extract particles
-
-    /// Options for the ODE solver in non-default settings are desired
-
+    unsigned int getNumberOfSpecies() const;
 
 
     private:
-    /*==============================
-      Variables
-      =============================*/
-    /// Flag to prevent reactions being added after finalization has occurred 
     bool finalized = false;
 
-
-
-    /// Flag indicating nucleation is present
     bool has_nucleation = false;
 
-
-
-    /// Flag indicating growth is present
     bool has_growth = false;
 
-
-
-    /// Flag indicating agglomeration is present
     bool has_agglomeration = false;
 
-
-
-    /// Flag indicating whether a particle is defined
     bool has_particle = false;
 
-
-
-    /// Stores a map of all chemicals species to their indices in vectors
     std::unordered_map<std::string, unsigned int> species_to_index_map;
 
-
-
-    /// Tracks how many chemical species are in the reaction network
     int n_species = 0;
 
-
-
-    /// Stores a map of all chemical reactions for simple conversion to ODEs
     std::vector< std::tuple< std::vector< std::pair<int, int> >, std::vector< std::pair<int, int> >, Real> > all_rxns;
 
-
-
-    /// Stores information about nucleation in preparation for the final indexing operation
     std::tuple< std::vector< std::pair<int, std::string> >, std::vector< std::pair<int, std::string> >, Real, int> nucleation_info;
 
-
-
-    /// Stores information about particle growth in preparation for the final indexing operation
     std::tuple< std::vector< std::pair<int, std::string> >, std::vector< std::pair<int, std::string> >, std::function<Real(const unsigned int)>, int> growth_info;
 
-
-
-    /// Stores information about particle agglomeration in preparation for the final indexing operation
     std::tuple< std::vector< std::pair<int, std::string> >, std::vector< std::pair<int, std::string> >, std::function<Real(const unsigned int, const unsigned int)> > agglomeration_info;
 
-
-
-    /// Particle size range and last size to track agglomeration for
     std::tuple< int, int, int> particle_info;
-
-
-
-    /// Internal object to perform ODE integration
-
-
-
   };
 
 
@@ -177,8 +97,10 @@ namespace NanoSim{
   particleSystem<Real>::addReaction(const std::vector< std::pair<int,std::string> > & reactants,
     const std::vector< std::pair<int,std::string> > & products,
     const Real reaction_rate){
-    // TODO error handling for particle keyword
-    // TODO error handle if reactions are finalized
+
+    if (finalized){
+      throw std::logic_error(std::string("ERROR: Attempt to add a reaction after the chemical system has been finalized.\nThe method 'addReaction()' MUST be called prior to 'finalizeReactions()'.\n"));
+    }
 
 
     // Vectors to put reaction into format for creating ODEs internally
@@ -211,7 +133,9 @@ namespace NanoSim{
   template<typename Real>
   void
   particleSystem<Real>::defineParticle(const int fewest_atoms, const int most_atoms, const int largest_agglomeration_size){
-    // TODO do some error handling on sizes
+    assert(fewest_atoms <= most_atoms);
+    assert(fewest_atoms <= largest_agglomeration_size);
+    assert(largest_agglomeration_size <= most_atoms);
     particle_info= {fewest_atoms, most_atoms, largest_agglomeration_size};
     has_particle = true;
   }
@@ -224,7 +148,9 @@ namespace NanoSim{
     const std::vector< std::pair<int, std::string> > & products,
     const Real reaction_rate,
     const int n_particles_created){
-    // TODO error handle if reactions are finalized
+     if (finalized){
+      throw std::logic_error(std::string("ERROR: Attempt to add particle nucleation after the chemical system has been finalized.\nThe method 'addNucleation()' MUST be called prior to 'finalizeReactions()'.\n"));
+    }
     nucleation_info = {reactants, products, reaction_rate, n_particles_created};
     has_nucleation = true;
   }
@@ -237,7 +163,9 @@ namespace NanoSim{
     const std::vector< std::pair<int, std::string> > & products,
     const std::function<Real(const unsigned int)> & growth_rate_fcn,
     const int particle_size_increase){
-      // TODO error handle if reactions are finalized
+      if (finalized){
+        throw std::logic_error(std::string("ERROR: Attempt to add particle growth after the chemical system has been finalized.\nThe method 'addGrowth()' MUST be called prior to 'finalizeReactions()'.\n"));
+      }
       growth_info = {reactants, products, growth_rate_fcn, particle_size_increase};
       has_growth = true;
   }
@@ -249,7 +177,9 @@ namespace NanoSim{
   particleSystem<Real>::addAgglomeration(const std::vector< std::pair<int, std::string> > & reactants,
     const std::vector< std::pair<int, std::string> > & products,
     const std::function<Real(const unsigned int, const unsigned int)> & agglomeration_rate_fcn){
-      // TODO error handle if reactions are finalized
+      if (finalized){
+        throw std::logic_error(std::string("ERROR: Attempt to add particle agglomeration after the chemical system has been finalized.\nThe method 'addAgglomeration()' MUST be called prior to 'finalizeReactions()'.\n"));
+      }
       agglomeration_info = {reactants, products, agglomeration_rate_fcn};
       has_agglomeration = true;
   }
@@ -259,7 +189,9 @@ namespace NanoSim{
   template<typename Real>
   void
   particleSystem<Real>::finalizeReactions(){
-    // TODO error handle if already called
+    if (finalized){
+      throw std::logic_error(std::string("ERROR: Attempt to finalize the chemical system a second time.\nThe method 'finalizeReactions()' can only be called one time. Otherwise chemical reactions will be duplicated and the resulting simulation will be incorrect.\n"));
+    }
 
     // Need to see if nucleation has any new chemical species to keep vector ordering correct
     if (has_nucleation){
@@ -426,7 +358,9 @@ namespace NanoSim{
   template<typename Real>
   void
   particleSystem<Real>::printChemicalReactions(){
-    // TODO error handling for finalization
+    if (!finalized){
+      std::cout << "WARNING: Chemical reactions not finalized. Final results may be different from the printed chemical reactions.\n";
+    }
     for (const auto & rxn : all_rxns){
       const auto reactants = std::get<0>(rxn);
       const auto products = std::get<1>(rxn);
@@ -454,33 +388,16 @@ namespace NanoSim{
 
 
   template<typename Real>
-  void
-  particleSystem<Real>::printODErhs(){
-    std::cout << "TODO\n";
-  }
-
-
-
-  template<typename Real>
-  void
-  particleSystem<Real>::printODEJacobian(){
-    std::cout << "TODO\n";
-  }
-
-
-
-  template<typename Real>
   std::function<int(Real, N_Vector, N_Vector, void*)>
   particleSystem<Real>::composeRHSfunction() const
   {
     auto fcn = [&](Real time, N_Vector x, N_Vector x_dot, void* user_data)
     {
+      // user_data is a pointer to an object containing linear algebra operations
+      abstractLinearAlgebraOperations<Real> *lin_algebra = static_cast< abstractLinearAlgebraOperations<Real>* >(user_data);
+
       // Reset the x_dot array to all zeros
       x_dot->ops->nvconst(0.0,x_dot);
-
-      // Retrieve underlying data
-      const Real* x_data = x->ops->nvgetarraypointer(x);
-      Real* x_dot_data = x_dot->ops->nvgetarraypointer(x_dot);
 
       for (const auto & rxn : all_rxns){
         const std::vector< std::pair<int,int> > reactants = std::get<0>(rxn);
@@ -494,7 +411,7 @@ namespace NanoSim{
           const unsigned int coeff = r.first;
           const unsigned int idx = r.second;
 
-          dx *= std::pow(x_data[idx], coeff);
+          dx *= std::pow(lin_algebra->vectorGetValue(x,idx), coeff);
         }
 
         // Contributions to reactants (all negative!)
@@ -502,7 +419,7 @@ namespace NanoSim{
           const unsigned int coeff = r.first;
           const unsigned int idx = r.second;
 
-          x_dot_data[idx] -= coeff * dx;
+          lin_algebra->vectorInsertAdd(x_dot, -1.0*coeff*dx, idx);
         }
 
         // Contributions to products (all positive!)
@@ -510,10 +427,9 @@ namespace NanoSim{
           const unsigned int coeff = p.first;
           const unsigned int idx = p.second;
 
-          x_dot_data[idx] += coeff * dx;
+          lin_algebra->vectorInsertAdd(x_dot, 1.0*coeff*dx, idx);
         }
       }
-
       return 0;
     };
     return fcn;
@@ -521,20 +437,18 @@ namespace NanoSim{
 
 
 
+  // TODO use linear algebra system
   template<typename Real>
   std::function<int(Real, N_Vector, N_Vector, SUNMatrix, void *, N_Vector, N_Vector, N_Vector)>
   particleSystem<Real>::composeJacobianfunction() const
   {
     auto fcn = [&](Real time, N_Vector x, N_Vector x_dot, SUNMatrix Jacobian, void * user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3)
     {
+      // user_data is a pointer to an object containing linear algebra operations
+      abstractLinearAlgebraOperations<Real> *lin_algebra = static_cast< abstractLinearAlgebraOperations<Real>* >(user_data);
+
       // Zero out the Jacobian
       Jacobian->ops->zero(Jacobian);
- 
-      // Efficient insertion into the Jacobian is implementation specific so a function to do this this provided in the user_data
-      const auto jacobianInsertAdd = *static_cast<std::function<int(SUNMatrix,sunindextype,sunindextype,Real)>*>(user_data);
- 
-      // Retrieve underlying data
-      const Real* x_data = x->ops->nvgetarraypointer(x);
 
       for (const auto & rxn : all_rxns){
         const std::vector< std::pair<int,int> > reactants = std::get<0>(rxn);
@@ -552,9 +466,9 @@ namespace NanoSim{
     
             if (r2==r){
               // Derivative of x^n = n*x^(n-1)
-              dx *= coeff * std::pow(x_data[idx], coeff-1); 
+              dx *= coeff * std::pow(lin_algebra->vectorGetValue(x,idx), coeff-1); 
             } else {
-              dx *= std::pow(x_data[idx], coeff);
+              dx *= std::pow(lin_algebra->vectorGetValue(x,idx), coeff);
             }
           }
           // Derivative wrt r computed up to +/- and coeff
@@ -563,7 +477,7 @@ namespace NanoSim{
             const Real coeff = reactants[r2].first;
             const unsigned int idx = reactants[r2].second;
             // Scale by negative since reactant
-            jacobianInsertAdd(Jacobian, idx, col, -coeff*dx);
+            lin_algebra->matrixInsertAdd(Jacobian, -coeff*dx, idx, col);
           }
 
           for (unsigned int p=0; p<products.size(); ++p){
@@ -571,7 +485,7 @@ namespace NanoSim{
             const Real coeff = products[p].first;
             const unsigned int idx = products[p].second;
             // Scale by positive since reactant
-            jacobianInsertAdd(Jacobian, idx, col, coeff*dx);
+            lin_algebra->matrixInsertAdd(Jacobian, coeff*dx, idx, col);
           }
         }
       }
@@ -580,6 +494,14 @@ namespace NanoSim{
     };
   
     return fcn;
+  }
+
+  
+
+  template<typename Real>
+  unsigned int
+  particleSystem<Real>::getNumberOfSpecies() const {
+    return n_species;
   }
 }
 #endif
