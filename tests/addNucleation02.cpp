@@ -3,7 +3,8 @@ Tests that adding a nucleation event creates the proper reactions
 */
 
 #include "particleSystem.h"
-#include "operationsSUNDenseMatrix.h"
+#include "linearAlgebraSUNDense.h"
+#include "testingUtilities.h"
 
 #include <sundials/sundials_nvector.h>
 #include <nvector/nvector_serial.h>
@@ -29,8 +30,6 @@ int main(){
     2.0);
 
   my_rxns.finalizeReactions();
-  // Order should be [A, D, E, C, B_2]
-  my_rxns.printChemicalReactions();
 
   N_Vector x, x_dot, tmp1, tmp2, tmp3;
   sunindextype length = 5;
@@ -38,38 +37,14 @@ int main(){
   x = N_VNew_Serial(length);
   x_dot = N_VNew_Serial(length);
 
-  realtype *x_data = N_VGetArrayPointer(x);
-  x_data[0] = 2.0;
-  x_data[1] = 3.0;
-  x_data[2] = 4.0;
-  x_data[3] = 5.0;
-  x_data[4] = 6.0;
-
-  realtype *x_dot_data = N_VGetArrayPointer(x_dot);
+  NanoSim::sunDenseLinearAlgebraOperations<realtype> lin_alg;
+  for (sunindextype i=0; i<length; ++i){
+    lin_alg.vectorInsert(x,i+2.0,i);
+  }
 
   const auto rhs_fcn = my_rxns.composeRHSfunction();
-  
-  const int err = rhs_fcn(0.0, x, x_dot, nullptr);
-
-  // should be [2, 3, 4, 5, 6] because untouched by rhs function
-  std::cout << "x = \n" << x_data[0] << "\n" 
-                       << x_data[1] << "\n" 
-                       << x_data[2] << "\n"
-                       << x_data[3] << "\n"
-                       << x_data[4] << "\n";
-  
-
-  // should be:
-  // dA/dt = -2*2*(A=2^2) -3*(A=2)*(D=3) = -34
-  // dD/dt = -3*(A=2)*(D=3) = -18
-  // dE/dt = 3*(A=2)*(D=3) =  18
-  // dC/dt = 1*2*(A=2^2) =   8
-  // dB_2/dt = 1*2*(A=2^2) =   8
-  std::cout << "dx = \n" << x_dot_data[0] << "\n" 
-                           << x_dot_data[1] << "\n" 
-                           << x_dot_data[2] << "\n"
-                           << x_dot_data[3] << "\n"
-                           << x_dot_data[4] << "\n";
+  void * user_data = static_cast<void *>(&lin_alg);
+  const int err = rhs_fcn(0.0, x, x_dot, user_data);
 
   const auto jac_fcn = my_rxns.composeJacobianfunction();
  
@@ -80,31 +55,9 @@ int main(){
 
   SUNMatrix J = SUNDenseMatrix(length,length);
 
-  std::function<int(SUNMatrix,sunindextype,sunindextype,realtype)> matrixInsertAdd = [](SUNMatrix A, sunindextype row, sunindextype col, realtype value){
-    return NanoSim::matrixInsertAdd(A, row, col, value);
-  };
-
-  void * user_data = static_cast<void*>(&matrixInsertAdd);
   const int errJ = jac_fcn(0.0, x, x_dot, J, user_data, tmp1, tmp2, tmp3);
-  realtype* J_data = SUNDenseMatrix_Data(J);
-  
-  // Should be
-  /*
-    -2*2*2*2 -3*3 = -25     -3*2 = -6   0   0   0
-    -3*3 = -9               -3*2 = -6   0   0   0
-    3*3 = 9                 3*2 = 6     0   0   0
-    2*2*2 = 8               0           0   0   0
-    2*2*2 = 8               0           0   0   0
-  */
-  std::cout << "J =\n";
-  for(unsigned int row=0; row<length; ++row){
-    for(unsigned int col=0; col<length; ++col){
-      std::cout << J_data[col*length + row] << " ";
-      if (col == length-1){
-        std::cout << "\n";
-      }
-    }
-  }
+
+  NanoSim::Testing::printParticleSystemOutput<realtype>(my_rxns, x, x_dot, J, lin_alg);
 
   N_VDestroy(x);
   N_VDestroy(x_dot);

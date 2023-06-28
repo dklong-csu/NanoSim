@@ -3,7 +3,8 @@ Tests that adding a single reaction constructs the intended reaction and ODE sys
 */
 
 #include "particleSystem.h"
-#include "operationsSUNDenseMatrix.h"
+#include "linearAlgebraSUNDense.h"
+#include "testingUtilities.h"
 
 #include <sundials/sundials_nvector.h>
 #include <nvector/nvector_serial.h>
@@ -36,7 +37,6 @@ int main(){
   my_rxns.addAgglomeration({},{},agglom_kernel);
 
   my_rxns.finalizeReactions();
-  my_rxns.printChemicalReactions();
 
   N_Vector x, x_dot, tmp1, tmp2, tmp3;
   sunindextype length = 9;
@@ -44,28 +44,15 @@ int main(){
   x = N_VNew_Serial(length);
   x_dot = N_VNew_Serial(length);
 
-  realtype *x_data = N_VGetArrayPointer(x);
+  NanoSim::sunDenseLinearAlgebraOperations<realtype> lin_alg;
   for (unsigned int i=0; i<length;++i){
-    x_data[i] = i + 2.0;
+    lin_alg.vectorInsert(x,i+2.0,i);
   }
-
-  realtype *x_dot_data = N_VGetArrayPointer(x_dot);
 
   const auto rhs_fcn = my_rxns.composeRHSfunction();
   
-  const int err = rhs_fcn(0.0, x, x_dot, nullptr);
-
-  // x values should be untouched by application of rhs function
-  std::cout << "x = \n";
-  for (unsigned int i=0;i<length;++i){
-    std::cout << x_data[i] << "\n";
-  }
-  
- 
-  std::cout << "dx = \n";
-  for (unsigned int i=0;i<length;++i){
-    std::cout << x_dot_data[i] << "\n";
-  }
+  void * user_data = static_cast<void *>(&lin_alg);
+  const int err = rhs_fcn(0.0, x, x_dot, user_data);
 
   const auto jac_fcn = my_rxns.composeJacobianfunction();
  
@@ -73,27 +60,10 @@ int main(){
   tmp2 = N_VNew_Serial(length);
   tmp3 = N_VNew_Serial(length);
 
-
   SUNMatrix J = SUNDenseMatrix(length,length);
-
-
-  std::function<int(SUNMatrix,sunindextype,sunindextype,realtype)> matrixInsertAdd = [](SUNMatrix A, sunindextype row, sunindextype col, realtype value){
-    return NanoSim::matrixInsertAdd(A, row, col, value);
-  };
-  
-  void * user_data = static_cast<void*>(&matrixInsertAdd);
   const int errJ = jac_fcn(0.0, x, x_dot, J, user_data, tmp1, tmp2, tmp3);
-  realtype* J_data = SUNDenseMatrix_Data(J);
 
-  std::cout << "J =\n";
-  for(unsigned int row=0; row<length; ++row){
-    for(unsigned int col=0; col<length; ++col){
-      std::cout << J_data[col*length + row] << " ";
-      if (col == length-1){
-        std::cout << "\n";
-      }
-    }
-  }
+  NanoSim::Testing::printParticleSystemOutput<realtype>(my_rxns, x, x_dot, J, lin_alg);
 
   N_VDestroy(x);
   N_VDestroy(x_dot);

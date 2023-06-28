@@ -3,7 +3,8 @@ Tests that adding a multiple reactions constructions the correct system
 */
 
 #include "particleSystem.h"
-#include "operationsSUNDenseMatrix.h"
+#include "linearAlgebraSUNDense.h"
+#include "testingUtilities.h"
 
 #include <sundials/sundials_nvector.h>
 #include <nvector/nvector_serial.h>
@@ -27,7 +28,6 @@ int main(){
     7.0);
 
   my_rxns.finalizeReactions();
-  my_rxns.printChemicalReactions();
 
   N_Vector x, x_dot, tmp1, tmp2, tmp3;
   sunindextype length = 3;
@@ -35,30 +35,16 @@ int main(){
   x = N_VNew_Serial(length);
   x_dot = N_VNew_Serial(length);
 
-  realtype *x_data = N_VGetArrayPointer(x);
-  x_data[0] = 2.0;
-  x_data[1] = 3.0;
-  x_data[2] = 4.0;
+  NanoSim::sunDenseLinearAlgebraOperations<realtype> lin_alg;
+  lin_alg.vectorInsert(x, 2.0, 0);
+  lin_alg.vectorInsert(x, 3.0, 1);
+  lin_alg.vectorInsert(x, 4.0, 2);
 
-  realtype *x_dot_data = N_VGetArrayPointer(x_dot);
 
   const auto rhs_fcn = my_rxns.composeRHSfunction();
   
-  const int err = rhs_fcn(0.0, x, x_dot, nullptr);
-
-  // should be [2, 3, 4] because untouched by rhs function
-  std::cout << "x = \n" << x_data[0] << "\n" 
-                       << x_data[1] << "\n" 
-                       << x_data[2] << "\n";
-  
-
-  // should be:
-  // -2*5*(2^2)*(3^3) + 3*7*(4^2) = -744
-  // -3*5*(2^2)*(3^3) + 4*7*(4^2) = -1172
-  //  4*5*(2^2)*(3^3) - 2*7*(4^2) = 1936
-  std::cout << "dx = \n" << x_dot_data[0] << "\n" 
-                           << x_dot_data[1] << "\n" 
-                           << x_dot_data[2] << "\n";
+  void * user_data = static_cast<void *>(&lin_alg);
+  const int err = rhs_fcn(0.0, x, x_dot, user_data);
 
   const auto jac_fcn = my_rxns.composeJacobianfunction();
  
@@ -67,32 +53,11 @@ int main(){
   tmp3 = N_VNew_Serial(length);
 
 
-  SUNMatrix J = SUNDenseMatrix(3,3);
+  SUNMatrix J = SUNDenseMatrix(length,length);
 
-
-  std::function<int(SUNMatrix,sunindextype,sunindextype,realtype)> matrixInsertAdd = [](SUNMatrix A, sunindextype row, sunindextype col, realtype value){
-    return NanoSim::matrixInsertAdd(A, row, col, value);
-  };
-
-  void * user_data = static_cast<void*>(&matrixInsertAdd);
   const int errJ = jac_fcn(0.0, x, x_dot, J, user_data, tmp1, tmp2, tmp3);
-  realtype* J_data = SUNDenseMatrix_Data(J);
   
-  // Should be
-  /*
-    -2*5*2*(2)*(3^3) = -1080    -3*5*2*(2^2)*(3^2) = -1080      2*7*3*(4) = 168
-    -2*5*3*(2)*(3^3) = -1620    -3*5*3*(2^2)*(3^2) = -1620      2*7*4*(4) = 224
-     2*5*4*(2)*(3^3) =  2160     3*5*4*(2^2)*(3^2) =  2160     -2*7*2*(4) = -112
-  */
-  std::cout << "J =\n";
-  for(unsigned int row=0; row<3; ++row){
-    for(unsigned int col=0; col<3; ++col){
-      std::cout << J_data[col*3 + row] << " ";
-      if (col == 2){
-        std::cout << "\n";
-      }
-    }
-  }
+  NanoSim::Testing::printParticleSystemOutput<realtype>(my_rxns, x, x_dot, J, lin_alg);
 
   N_VDestroy(x);
   N_VDestroy(x_dot);
