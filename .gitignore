@@ -30,3 +30,21 @@
 *.exe
 *.out
 *.app
+*
+!/**/
+!*.*
+/build/
+
+# CMake files
+CMakeCache.txt
+CMakeFiles
+Testing
+cmake_install.cmake
+CTestTestfile.cmake
+.cmake/
+
+# In the tests/ directory, ignore everything but the .cpp and .output files
+tests/*
+!tests/*cpp
+!tests/*output
+!tests/*input
