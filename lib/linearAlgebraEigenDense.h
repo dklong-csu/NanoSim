@@ -1,10 +1,8 @@
-#ifndef NANOSIM_LINEARALGEBRASUNDENSE_H
-#define NANOSIM_LINEARALGEBRASUNDENSE_H
+#ifndef NANOSIM_LINEARALGEBRAEIGENDENSE_H
+#define NANOSIM_LINEARALGEBRAEIGENDENSE_H
 
 #include "linearAlgebra.h"
-#include <sunmatrix/sunmatrix_dense.h>
-#include <nvector/nvector_serial.h>
-#include <sundials/sundials_types.h>
+#include <Eigen/Dense>
 
 
 namespace NanoSim{
@@ -31,8 +29,8 @@ namespace NanoSim{
   template<typename Real>
   void
   sunDenseLinearAlgebraOperations<Real>::vectorInsertAdd(N_Vector x, Real value, sunindextype i){
-    Real *x_data = x->ops->nvgetarraypointer(x);
-    x_data[i] += value;
+    Eigen::Vector<Real,Eigen::Dynamic>* x_data = static_cast< Eigen::Vector<Real,Eigen::Dynamic>* >(x->content);
+    x_data->operator()(i) += value;
   }
 
 
@@ -40,8 +38,8 @@ namespace NanoSim{
   template<typename Real>
   Real
   sunDenseLinearAlgebraOperations<Real>::vectorGetValue(N_Vector x, sunindextype i){
-    const Real *x_data = x->ops->nvgetarraypointer(x);
-    return x_data[i];
+    Eigen::Vector<Real,Eigen::Dynamic>* x_data = static_cast< Eigen::Vector<Real,Eigen::Dynamic>* >(x->content);
+    return x_data->operator()(i);
   }
 
 
@@ -49,8 +47,9 @@ namespace NanoSim{
   template<typename Real>
   void
   sunDenseLinearAlgebraOperations<Real>::vectorInsert(N_Vector x, Real value, sunindextype i){
-    Real *x_data = x->ops->nvgetarraypointer(x);
-    x_data[i] = value;
+    Eigen::Vector<Real,Eigen::Dynamic>* x_data 
+      = static_cast< Eigen::Vector<Real,Eigen::Dynamic>* >(x->content);
+    x_data->operator()(i) = value;
   }
 
 
@@ -58,7 +57,7 @@ namespace NanoSim{
   template<typename Real>
   N_Vector
   sunDenseLinearAlgebraOperations<Real>::createNewVector(sunindextype N){
-    return N_VNew_Serial(N);
+    return N_VNew_Eigen(N); // TODO
   }
 
 
@@ -66,7 +65,7 @@ namespace NanoSim{
   template<typename Real>
   SUNMatrix
   sunDenseLinearAlgebraOperations<Real>::createNewMatrix(sunindextype N, sunindextype M){
-    return SUNDenseMatrix(N,M);
+    return SUNDenseEigenMatrix(N,M); // TODO
   }
 
 
@@ -74,9 +73,9 @@ namespace NanoSim{
   template<typename Real>
   void
   sunDenseLinearAlgebraOperations<Real>::matrixInsertAdd(SUNMatrix A, Real value, sunindextype row, sunindextype col){
-    Real* A_data = SUNDenseMatrix_Data(A);
-    const sunindextype n_rows = SUNDenseMatrix_Rows(A);
-    A_data[col*n_rows + row] += value;
+    Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>* A_data
+      = static_cast< Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>* >(A->content);
+    A_data->operator()(row, col) += value;
   }
 
 
@@ -84,9 +83,9 @@ namespace NanoSim{
   template<typename Real>
   Real
   sunDenseLinearAlgebraOperations<Real>::matrixGetValue(SUNMatrix A, sunindextype row, sunindextype col){
-    const Real* A_data = SUNDenseMatrix_Data(A);
-    const sunindextype n_rows = SUNDenseMatrix_Rows(A);
-    return A_data[col*n_rows + row];
+    Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>* A_data
+      = static_cast< Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>* >(A->content);
+    return A_data->operator()(row, col);
   }
 
 
@@ -94,9 +93,9 @@ namespace NanoSim{
   template<typename Real>
   void
   sunDenseLinearAlgebraOperations<Real>::matrixInsert(SUNMatrix A, Real value, sunindextype row, sunindextype col){
-    Real* A_data = SUNDenseMatrix_Data(A);
-    const sunindextype n_rows = SUNDenseMatrix_Rows(A);
-    A_data[col*n_rows + row] = value;
+    Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>* A_data
+      = static_cast< Eigen::Matrix<Real, Eigen::Dynamic, Eigen::Dynamic>* >(A->content);
+    A_data->operator()(row, col) = value;
   }
 }
 #endif

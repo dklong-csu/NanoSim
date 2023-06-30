@@ -49,11 +49,22 @@ IF ("${_sundials_cvode_lib}" STREQUAL "_sundials_cvode_lib-NOTFOUND")
           "to that library by setting the SUNDIALS_DIR environment variable, "
           "or by passing '-DSUNDIALS_DIR=...' as an argument to 'cmake'.")
 ELSE()
-  MESSAGE(STATUS "Found SUNDIALS CVODE library at ${_sundials_CVode_lib}")
-  INCLUDE_DIRECTORIES(${_sundials_include_dir})
+  MESSAGE(STATUS "Found SUNDIALS CVODE library at ${_sundials_cvode_lib}")
+  #INCLUDE_DIRECTORIES(${_sundials_cvode_lib})
   LINK_DIRECTORIES(${SUNDIALS_DIR}/lib)
 ENDIF()
 
+#########################################
+### Find the EIGEN library
+if(NOT DEFINED EIGEN_DIR)
+  message(FATAL_ERROR
+    "No path to the Eigen software is provided."
+    "You have to specify a path to that library by "
+    "passing '-DEIGEN_DIR=...' as an argument to 'cmake'."
+    "The directory specified should access header files via "
+    "'Eigen/Dense', 'Eigen/Sparse', etc.")
+endif()
+INCLUDE_DIRECTORIES(${EIGEN_DIR})
 
 ###################
 ## Find include files in this project
@@ -74,3 +85,7 @@ target_link_libraries(libNanoSim
 ## Set up the test suite machinery
 enable_testing()
 add_subdirectory(tests)
+
+###################
+## Add the tutorial programs
+add_subdirectory(tutorial)
