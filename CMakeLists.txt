@@ -66,6 +66,17 @@ if(NOT DEFINED EIGEN_DIR)
 endif()
 INCLUDE_DIRECTORIES(${EIGEN_DIR})
 
+
+
+#########################################
+### Add optimlib for optimization
+if(NOT DEFINED OPTIMLIB_DIR)
+  message(FATAL_ERROR
+    "Provide the path to the folder containing 'optim.hpp' with '-DOPTIMLIB_DIR=/path/to/optimlib/')")
+endif()
+include_directories(${OPTIMLIB_DIR})
+
+
 ###################
 ## Find include files in this project
 INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/lib)

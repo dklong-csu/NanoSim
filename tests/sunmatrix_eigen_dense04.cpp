@@ -1,4 +1,4 @@
-#include "sunmatrix_eigen_dense.h"
+#include "sunmatrixEigen.h"
 #include "Eigen/Dense"
 #include <iostream>
 
@@ -6,7 +6,7 @@ using Matrix = Eigen::Matrix<realtype,Eigen::Dynamic, Eigen::Dynamic>;
 
 int main ()
 {
-  SUNMatrix A = NanoSim::SUNMatNewEigenDense<realtype>(2,2);
+  SUNMatrix A = NanoSim::SUNMatNewEigenMatrix<realtype, Matrix>(2,2);
   auto A_matrix = static_cast<Matrix*>(A->content);
   A_matrix->operator()(0,0) = 1;
   A_matrix->operator()(1,0) = 2;

@@ -1,4 +1,4 @@
-#include "nvector_eigen_dense.h"
+#include "nvectorEigen.h"
 #include "Eigen/Dense"
 #include <iostream>
 

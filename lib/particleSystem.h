@@ -1,15 +1,16 @@
 #ifndef NANOSIM_PARTICLESYSTEM_H
 #define NANOSIM_PARTICLESYSTEM_H
 
-#include<vector> // needed to store the list of chemical reactions
-#include<functional> // needed to pass a function as an argument
-#include<unordered_map> // needed to automatically index chemical species
-#include<utility> // needed to have coefficient-chemical pair for reactions
-#include<string> // needed to have text descriptions of chemical species
-#include<iostream> // needed to output
-#include<cmath> // needed to raise a number to a power
-#include<cassert> // needed to assert certain conditions for error checking
-#include<stdexcept> // needed for error handling
+#include <vector> // needed to store the list of chemical reactions
+#include <functional> // needed to pass a function as an argument
+#include <unordered_map> // needed to automatically index chemical species
+#include <utility> // needed to have coefficient-chemical pair for reactions
+#include <string> // needed to have text descriptions of chemical species
+#include <iostream> // needed to output
+#include <cmath> // needed to raise a number to a power
+#include <cassert> // needed to assert certain conditions for error checking
+#include <stdexcept> // needed for error handling
+#include <fstream> // needed to write sparsity pattern to file
 
 // includes for SUNDIALS to solve ODEs
 #include <sundials/sundials_nvector.h>
@@ -48,6 +49,11 @@ namespace NanoSim{
       const std::vector< std::pair<int, std::string> > & products,
       const std::function<Real(const unsigned int, const unsigned int)> & agglomeration_rate_fcn);
 
+    void addeMoMGrowth(const std::string & growth_precursor,
+      const std::vector< std::pair<int, std::string> > & products,
+      const Real rate_inflow,
+      const Real rate_eMoM);
+
     void finalizeReactions();
 
     void printChemicalSpecies();
@@ -62,6 +68,8 @@ namespace NanoSim{
 
     unsigned int getNumberOfSpecies() const;
 
+    void printJacobianSparsityPattern(std::string out_filename, abstractLinearAlgebraOperations<Real> *lin_alg);
+
 
     private:
     bool finalized = false;
@@ -74,6 +82,8 @@ namespace NanoSim{
 
     bool has_particle = false;
 
+    bool has_eMoM = false;
+
     std::unordered_map<std::string, unsigned int> species_to_index_map;
 
     int n_species = 0;
@@ -85,6 +95,8 @@ namespace NanoSim{
     std::tuple< std::vector< std::pair<int, std::string> >, std::vector< std::pair<int, std::string> >, std::function<Real(const unsigned int)>, int> growth_info;
 
     std::tuple< std::vector< std::pair<int, std::string> >, std::vector< std::pair<int, std::string> >, std::function<Real(const unsigned int, const unsigned int)> > agglomeration_info;
+
+    std::tuple< std::string, std::vector< std::pair<int, std::string> >, Real, Real > eMoM_info;
 
     std::tuple< int, int, int> particle_info;
   };
@@ -188,6 +200,20 @@ namespace NanoSim{
 
   template<typename Real>
   void
+  particleSystem<Real>::addeMoMGrowth(const std::string & growth_precursor,
+    const std::vector< std::pair<int, std::string> > & products,
+    const Real rate_inflow,
+    const Real rate_eMoM){
+    if (finalized){
+        throw std::logic_error(std::string("ERROR: Attempt to add particle growth after the chemical system has been finalized.\nThe method 'addeMoMGrowth()' MUST be called prior to 'finalizeReactions()'.\n"));
+      }
+    eMoM_info = {growth_precursor, products, rate_inflow, rate_eMoM};
+    has_eMoM = true;
+  }
+
+
+  template<typename Real>
+  void
   particleSystem<Real>::finalizeReactions(){
     if (finalized){
       throw std::logic_error(std::string("ERROR: Attempt to finalize the chemical system a second time.\nThe method 'finalizeReactions()' can only be called one time. Otherwise chemical reactions will be duplicated and the resulting simulation will be incorrect.\n"));
@@ -251,6 +277,35 @@ namespace NanoSim{
           n_species += 1; // Vector indexes from 0 so increment after
         }
       }
+    }
+
+    // TODO
+    // Need to see if eMoM growth has any new chemical species to keep vector ordering correct
+    if (has_eMoM){
+      auto precursor = std::get<0>(eMoM_info);
+      auto products = std::get<1>(eMoM_info);
+      if (!species_to_index_map.contains(precursor)){
+        species_to_index_map[precursor] = n_species;
+        n_species += 1;
+      }
+
+      for (const auto & p : products){
+        if (!species_to_index_map.contains(p.second)){
+          species_to_index_map[p.second] = n_species;
+          n_species += 1; // Vector indexes from 0 so increment after
+        }
+      }
+
+      // Add in "species" for the moments that eMoM models
+      // TODO throw error if moments already defined
+      species_to_index_map["__MOMENT3__"] = n_species;
+      n_species += 1;
+      species_to_index_map["__MOMENT2__"] = n_species;
+      n_species += 1;
+      species_to_index_map["__MOMENT1__"] = n_species;
+      n_species += 1;
+      species_to_index_map["__MOMENT0__"] = n_species;
+      n_species += 1;
     }
 
 
@@ -337,6 +392,20 @@ namespace NanoSim{
             }
           }
         }
+      }
+
+      // Add the last growth reaction for eMoM cases!
+      if (has_eMoM){
+        std::vector< std::pair<int, std::string> > reactants = std::get<0>(growth_info);
+        std::vector< std::pair<int, std::string> > products  = std::get<1>(growth_info);
+
+        const std::string consumed_particle = "__PARTICLE__" + std::to_string(most_atoms);
+        reactants.push_back({1,consumed_particle});
+
+        const auto reaction_rate_function = std::get<2>(growth_info);
+        const Real reaction_rate = reaction_rate_function(most_atoms);
+
+        addReaction(reactants, products, reaction_rate);
       }
     }
     finalized = true;
@@ -430,6 +499,70 @@ namespace NanoSim{
           lin_algebra->vectorInsertAdd(x_dot, 1.0*coeff*dx, idx);
         }
       }
+
+      // TODO
+      // add in eMoM if present!
+
+      // precursor gets: -8*delx/9 * [precur] * k3 * xn^3 * q - k3/delx^2 * 8/3 * [precur] * [__MOMENT2__]
+
+      // products get:   +8*delx/9 * [precur] * k3 * xn^3 * q + k3/delx^2 * 8/3 * [precur] * [__MOMENT2__]
+
+      // M3: 8*delx/9 * [precur] * k3 * xn^3 * q + 3*8*k3*delx/9 * [precur] * M2
+      // M2: 8*delx/9 * [prec]   * k3 * xn^2 * q + 2*8*k3*delx/9 * [precur] * M1
+      // M1: 8*delx/9 * [prec]   * k3 * xn^1 * q +   8*k3*delx/9 * [precur] * M0
+      // M0: 8*delx/9 * [prec]   * k3 * xn^0 * q 
+
+      // xn = delx * maxsize^(1/3)
+      // delx = 0.3
+      // q = 3 * k2 * M^(2/3) * [biggest particle] / delx / k3
+      if (has_eMoM){
+        // TODO this is hardcoded right now
+        const Real delx = 0.3;
+
+        const unsigned int most_atoms = std::get<1>(particle_info);
+        const Real xn = delx * std::pow(1.0 * most_atoms, 1.0 / 3.0);
+        const Real k_inflow = std::get<2>(eMoM_info);
+        const Real k_eMoM   = std::get<3>(eMoM_info);
+        const auto most_atoms_idx = species_to_index_map.find("__PARTICLE__" + std::to_string(most_atoms))->second;
+        const Real q = 3 * k_inflow * std::pow( most_atoms * 1.0, 2.0 / 3.0) * lin_algebra->vectorGetValue(x, most_atoms_idx) / delx / k_eMoM;
+
+        const auto precursor_id = std::get<0>(eMoM_info);
+        const auto precursor_conc = lin_algebra->vectorGetValue(x, species_to_index_map.find(precursor_id)->second);
+
+        const auto m2 = lin_algebra->vectorGetValue(x, species_to_index_map.find("__MOMENT2__")->second);
+        const auto m1 = lin_algebra->vectorGetValue(x, species_to_index_map.find("__MOMENT1__")->second);
+        const auto m0 = lin_algebra->vectorGetValue(x, species_to_index_map.find("__MOMENT0__")->second);
+
+        const Real prefactor = 8. * delx / 9. * precursor_conc * k_eMoM;
+
+        const Real non_particle_xdot = prefactor * xn * xn * xn * q
+          + prefactor * m2 / delx / delx / 3.;
+        lin_algebra->vectorInsertAdd(x_dot, 
+          -non_particle_xdot,
+          species_to_index_map.find(precursor_id)->second);
+        const auto products = std::get<1>(eMoM_info);
+        for (auto p : products){
+          const auto coeff = p.first;
+          const auto p_ID = p.second;
+          lin_algebra->vectorInsertAdd(x_dot,
+            non_particle_xdot,
+            species_to_index_map.find(p_ID)->second);
+        }
+
+        // xdot for moments
+        lin_algebra->vectorInsertAdd(x_dot,
+          prefactor * q * std::pow(xn, 3.0)  +  3 * prefactor * m2,
+          species_to_index_map.find("__MOMENT3__")->second);
+        lin_algebra->vectorInsertAdd(x_dot,
+          prefactor * q * std::pow(xn, 2.0)  +  2 * prefactor * m2,
+          species_to_index_map.find("__MOMENT2__")->second);
+        lin_algebra->vectorInsertAdd(x_dot,
+          prefactor * q * std::pow(xn, 1.0)  +  1 * prefactor * m2,
+          species_to_index_map.find("__MOMENT1__")->second);
+        lin_algebra->vectorInsertAdd(x_dot,
+          prefactor * q * std::pow(xn, 0)    +  0 * prefactor * m2,
+          species_to_index_map.find("__MOMENT0__")->second);
+      }
       return 0;
     };
     return fcn;
@@ -490,6 +623,9 @@ namespace NanoSim{
         }
       }
 
+      // TODO
+      // add eMoM if present!
+
       return 0;
     };
   
@@ -502,6 +638,49 @@ namespace NanoSim{
   unsigned int
   particleSystem<Real>::getNumberOfSpecies() const {
     return n_species;
+  }
+
+
+
+  template<typename Real>
+  void
+  particleSystem<Real>::printJacobianSparsityPattern(const std::string out_filename, abstractLinearAlgebraOperations<Real> *lin_alg){
+    std::ofstream myfile;
+    myfile.open(out_filename);
+    auto jFcn = composeJacobianfunction();
+    
+    N_Vector x = lin_alg->createNewVector(n_species);
+    N_VConst(1.0, x);
+    N_Vector x_dot = N_VClone(x);
+    N_Vector tmp1 = N_VClone(x);
+    N_Vector tmp2 = N_VClone(x);
+    N_Vector tmp3 = N_VClone(x);
+
+    SUNMatrix J = lin_alg->createNewMatrix(n_species, n_species);
+    void * user_data = static_cast<void *>(lin_alg);
+    jFcn(0.0, x, x_dot, J, user_data, tmp1, tmp2, tmp3);
+
+    for(unsigned int row=0; row<n_species;++row){
+      for (unsigned int col=0; col<n_species;++col){
+        auto jval = lin_alg->matrixGetValue(J, row, col);
+        if (jval != 0.0){
+          myfile << "#";
+        } else {
+          myfile << " ";
+        }
+        if (col == n_species-1){
+          myfile << "\n";
+        }
+      }
+    }
+
+    myfile.close();
+    SUNMatDestroy(J);
+    N_VDestroy(x);
+    N_VDestroy(x_dot);
+    N_VDestroy(tmp1);
+    N_VDestroy(tmp2);
+    N_VDestroy(tmp3);
   }
 }
 #endif
