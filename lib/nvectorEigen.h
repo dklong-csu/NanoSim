@@ -68,7 +68,8 @@ namespace NanoSim{
   N_Vector
   nv_eigen_clone_empty( N_Vector w)
   {
-    N_Vector v = N_VNewEmpty();
+    sundials::Context cntxt;
+    N_Vector v = N_VNewEmpty(cntxt);
 
     N_VCopyOps(w, v);
     v->content = nullptr;
@@ -483,7 +484,8 @@ namespace NanoSim{
     auto vec = new Eigen::Vector<Real, Eigen::Dynamic>(N);
     vec->setZero();
     
-    N_Vector nv = N_VNewEmpty();
+    sundials::Context cntxt;
+    N_Vector nv = N_VNewEmpty(cntxt);
 
     nv->content = (void*) vec;
 

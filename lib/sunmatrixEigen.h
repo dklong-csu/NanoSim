@@ -30,7 +30,8 @@ namespace NanoSim{
   SUNMatrix
   sunmat_eigen_clone(SUNMatrix A)
   {
-    SUNMatrix B = SUNMatNewEmpty();
+    sundials::Context cntxt;
+    SUNMatrix B = SUNMatNewEmpty(cntxt);
     sunmat_eigen_copy_ops(A, B);
 
     auto A_ptr = static_cast< EigenMatrix *>(A->content);
@@ -111,7 +112,8 @@ namespace NanoSim{
   template<typename Real, typename EigenMatrix>
   SUNMatrix
   SUNMatNewEigenMatrix(sunindextype rows, sunindextype cols){
-    SUNMatrix A = SUNMatNewEmpty();
+    sundials::Context cntxt;
+    SUNMatrix A = SUNMatNewEmpty(cntxt);
 
     EigenMatrix* mat = new EigenMatrix(rows, cols);
     mat->setZero();

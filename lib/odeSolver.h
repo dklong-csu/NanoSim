@@ -90,7 +90,8 @@ namespace NanoSim{
     SUNMatrix template_matrix,
     SUNLinearSolver linear_solver,
     cvodeOptions<Real> & opts){
-      void * cvode_memory = CVodeCreate(CV_BDF);
+      sundials::Context cntxt;
+      void * cvode_memory = CVodeCreate(CV_BDF, cntxt);
 
       auto flag = CVodeInit(cvode_memory, rhs_function<Real>, 0.0, initial_condition);
 

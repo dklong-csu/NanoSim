@@ -68,8 +68,8 @@ namespace NanoSim{
   template <typename Real, typename SolverType>
   SUNLinearSolver
   createLinearSolverEigenDense(){
-
-    SUNLinearSolver LS = SUNLinSolNewEmpty();
+    sundials::Context cntxt;
+    SUNLinearSolver LS = SUNLinSolNewEmpty(cntxt);
 
     LS->ops->gettype = NanoSim::getTypeEigenDenseSolver;
     LS->ops->setup = NanoSim::setupEigenDenseSolver<Real, SolverType>;
@@ -88,8 +88,8 @@ namespace NanoSim{
   template <typename Real, typename SolverType>
   SUNLinearSolver
   createLinearSolverEigenSparse(){
-
-    SUNLinearSolver LS = SUNLinSolNewEmpty();
+    sundials::Context cntxt;
+    SUNLinearSolver LS = SUNLinSolNewEmpty(cntxt);
 
     LS->ops->gettype = NanoSim::getTypeEigenSparseSolver;
     LS->ops->setup = NanoSim::setupEigenSparseSolver<Real, SolverType>;

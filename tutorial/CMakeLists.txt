@@ -15,10 +15,10 @@ add_executable(step03
 target_link_libraries(step03
   libNanoSim)
 
-add_executable(step04
-  step04-optimization.cpp)
-target_link_libraries(step04
-  libNanoSim)
+# add_executable(step04
+#   step04-optimization.cpp)
+# target_link_libraries(step04
+#   libNanoSim)
 
 add_executable(step05
   step05-solveRxnFast.cpp)

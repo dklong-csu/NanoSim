@@ -52,7 +52,8 @@ namespace NanoSim{
     void addeMoMGrowth(const std::string & growth_precursor,
       const std::vector< std::pair<int, std::string> > & products,
       const Real rate_inflow,
-      const Real rate_eMoM);
+      const Real rate_eMoM,
+      const Real conversion_factor = 0.3);
 
     void finalizeReactions();
 
@@ -70,6 +71,7 @@ namespace NanoSim{
 
     void printJacobianSparsityPattern(std::string out_filename, abstractLinearAlgebraOperations<Real> *lin_alg);
 
+    std::unordered_map<std::string, unsigned int> species_to_index_map;
 
     private:
     bool finalized = false;
@@ -84,7 +86,7 @@ namespace NanoSim{
 
     bool has_eMoM = false;
 
-    std::unordered_map<std::string, unsigned int> species_to_index_map;
+    
 
     int n_species = 0;
 
@@ -96,7 +98,7 @@ namespace NanoSim{
 
     std::tuple< std::vector< std::pair<int, std::string> >, std::vector< std::pair<int, std::string> >, std::function<Real(const unsigned int, const unsigned int)> > agglomeration_info;
 
-    std::tuple< std::string, std::vector< std::pair<int, std::string> >, Real, Real > eMoM_info;
+    std::tuple< std::string, std::vector< std::pair<int, std::string> >, Real, Real , Real> eMoM_info;
 
     std::tuple< int, int, int> particle_info;
   };
@@ -203,11 +205,12 @@ namespace NanoSim{
   particleSystem<Real>::addeMoMGrowth(const std::string & growth_precursor,
     const std::vector< std::pair<int, std::string> > & products,
     const Real rate_inflow,
-    const Real rate_eMoM){
+    const Real rate_eMoM,
+    const Real conversion_factor){
     if (finalized){
         throw std::logic_error(std::string("ERROR: Attempt to add particle growth after the chemical system has been finalized.\nThe method 'addeMoMGrowth()' MUST be called prior to 'finalizeReactions()'.\n"));
       }
-    eMoM_info = {growth_precursor, products, rate_inflow, rate_eMoM};
+    eMoM_info = {growth_precursor, products, rate_inflow, rate_eMoM, conversion_factor};
     has_eMoM = true;
   }
 
@@ -500,69 +503,104 @@ namespace NanoSim{
         }
       }
 
-      // TODO
       // add in eMoM if present!
-
-      // precursor gets: -8*delx/9 * [precur] * k3 * xn^3 * q - k3/delx^2 * 8/3 * [precur] * [__MOMENT2__]
-
-      // products get:   +8*delx/9 * [precur] * k3 * xn^3 * q + k3/delx^2 * 8/3 * [precur] * [__MOMENT2__]
-
-      // M3: 8*delx/9 * [precur] * k3 * xn^3 * q + 3*8*k3*delx/9 * [precur] * M2
-      // M2: 8*delx/9 * [prec]   * k3 * xn^2 * q + 2*8*k3*delx/9 * [precur] * M1
-      // M1: 8*delx/9 * [prec]   * k3 * xn^1 * q +   8*k3*delx/9 * [precur] * M0
-      // M0: 8*delx/9 * [prec]   * k3 * xn^0 * q 
-
-      // xn = delx * maxsize^(1/3)
-      // delx = 0.3
-      // q = 3 * k2 * M^(2/3) * [biggest particle] / delx / k3
+      // FIXME
       if (has_eMoM){
-        // TODO this is hardcoded right now
-        const Real delx = 0.3;
+        /*
+          Values used
+        */
+        const Real delx = std::get<4>(eMoM_info); 
+        const unsigned int M = std::get<1>(particle_info); // largest tracked cluster which flows into eMoM
+        const Real xM = delx * std::pow(1.0 * M, 1.0 / 3.0); // continuous diameter size of largest cluster
+        const Real k_inflow = std::get<2>(eMoM_info); // Growth rate of cluster of size M growing into eMoM
+        const Real k_eMoM   = std::get<3>(eMoM_info); // Growth rate of eMoM
 
-        const unsigned int most_atoms = std::get<1>(particle_info);
-        const Real xn = delx * std::pow(1.0 * most_atoms, 1.0 / 3.0);
-        const Real k_inflow = std::get<2>(eMoM_info);
-        const Real k_eMoM   = std::get<3>(eMoM_info);
-        const auto most_atoms_idx = species_to_index_map.find("__PARTICLE__" + std::to_string(most_atoms))->second;
-        const Real q = 3 * k_inflow * std::pow( most_atoms * 1.0, 2.0 / 3.0) * lin_algebra->vectorGetValue(x, most_atoms_idx) / delx / k_eMoM;
+        const auto M_idx = species_to_index_map.find("__PARTICLE__" + std::to_string(M))->second;
+        // std::cout << "M idx=" << M_idx << "  ";
 
-        const auto precursor_id = std::get<0>(eMoM_info);
-        const auto precursor_conc = lin_algebra->vectorGetValue(x, species_to_index_map.find(precursor_id)->second);
+        /*
+          Concentrations
+        */
+        const auto A_idx = species_to_index_map.find(std::get<0>(eMoM_info))->second;
+        // std::cout << "A idx=" << A_idx << "  ";
+        const auto A = lin_algebra->vectorGetValue(x, A_idx);
 
-        const auto m2 = lin_algebra->vectorGetValue(x, species_to_index_map.find("__MOMENT2__")->second);
-        const auto m1 = lin_algebra->vectorGetValue(x, species_to_index_map.find("__MOMENT1__")->second);
-        const auto m0 = lin_algebra->vectorGetValue(x, species_to_index_map.find("__MOMENT0__")->second);
+        const auto M3_idx = species_to_index_map.find("__MOMENT3__")->second;
+        const auto M2_idx = species_to_index_map.find("__MOMENT2__")->second;
+        const auto M1_idx = species_to_index_map.find("__MOMENT1__")->second;
+        const auto M0_idx = species_to_index_map.find("__MOMENT0__")->second;
+        // std::cout << "M3 idx=" << M3_idx << "  ";
+        // std::cout << "M2 idx=" << M2_idx << "  ";
+        // std::cout << "M1 idx=" << M1_idx << "  ";
+        // std::cout << "M0 idx=" << M0_idx << "\n";
 
-        const Real prefactor = 8. * delx / 9. * precursor_conc * k_eMoM;
+        const auto M3 = lin_algebra->vectorGetValue(x, M3_idx);
+        const auto M2 = lin_algebra->vectorGetValue(x, M2_idx);
+        const auto M1 = lin_algebra->vectorGetValue(x, M1_idx);
+        const auto M0 = lin_algebra->vectorGetValue(x, M0_idx);
 
-        const Real non_particle_xdot = prefactor * xn * xn * xn * q
-          + prefactor * m2 / delx / delx / 3.;
-        lin_algebra->vectorInsertAdd(x_dot, 
-          -non_particle_xdot,
-          species_to_index_map.find(precursor_id)->second);
+        /*
+          Flux:
+          q = 3 * k_inflow * M^(2/3) * [BM] / delx / k_eMoM
+        */
+        const Real q = 3 * k_inflow * std::pow( M * 1.0, 2.0 / 3.0) * lin_algebra->vectorGetValue(x, M_idx) / delx / k_eMoM;
+
+        /*
+          Precursor contribution
+          dA/dt += -8*delx/9 * [A] * k_eMoM * xn^3 * q - k_eMoM * 8 / (delx^2 * 3) * [A] * [M2]
+        */
+        lin_algebra->vectorInsertAdd(x_dot,
+          -8. * delx / 9. * A * k_eMoM * std::pow(xM, 3.0) * q - k_eMoM * 8. / std::pow(delx, 2.0) / 3. * A * M2,
+          A_idx);
+
+        /*
+          Products contribution
+          dP/dt += 8*delx/9 * [A] * k_eMoM * xn^3 * q + k_eMoM * 8 / (delx^2 * 3) * [A] * [M2]
+        */
         const auto products = std::get<1>(eMoM_info);
         for (auto p : products){
           const auto coeff = p.first;
           const auto p_ID = p.second;
-          lin_algebra->vectorInsertAdd(x_dot,
-            non_particle_xdot,
-            species_to_index_map.find(p_ID)->second);
+          const auto p_idx = species_to_index_map.find(p_ID)->second;
+          lin_algebra->vectorInsertAdd(x_dot, 
+            coeff * (8. * delx / 9. * A * k_eMoM * std::pow(xM, 3.0) * q + k_eMoM * 8. / std::pow(delx, 2.0) / 3. * A * M2),
+            p_idx); 
         }
 
-        // xdot for moments
-        lin_algebra->vectorInsertAdd(x_dot,
-          prefactor * q * std::pow(xn, 3.0)  +  3 * prefactor * m2,
-          species_to_index_map.find("__MOMENT3__")->second);
-        lin_algebra->vectorInsertAdd(x_dot,
-          prefactor * q * std::pow(xn, 2.0)  +  2 * prefactor * m2,
-          species_to_index_map.find("__MOMENT2__")->second);
-        lin_algebra->vectorInsertAdd(x_dot,
-          prefactor * q * std::pow(xn, 1.0)  +  1 * prefactor * m2,
-          species_to_index_map.find("__MOMENT1__")->second);
-        lin_algebra->vectorInsertAdd(x_dot,
-          prefactor * q * std::pow(xn, 0)    +  0 * prefactor * m2,
-          species_to_index_map.find("__MOMENT0__")->second);
+
+       /*
+        Moment 3
+        dM3/dt = 8 * delx / 9 * [A] * k_eMoM * xM^3 * [q] + 3 * 8 * k_eMoM * delx / 9 * [A] * [M2]
+       */
+      lin_algebra->vectorInsert(x_dot,
+        8. * delx / 9. * A * k_eMoM * std::pow(xM, 3.0) * q + 3. * 8. * k_eMoM * delx / 9. * A * M2,
+        M3_idx);
+
+      /*
+        Moment 2
+        dM2/dt = 8 * delx / 9 * [A] * k_eMoM * xM^2 * [q] + 2 * 8 * k_eMoM * delx / 9 * [A] * [M1]
+       */
+      lin_algebra->vectorInsert(x_dot,
+        8. * delx / 9. * A * k_eMoM * std::pow(xM, 2.0) * q + 2. * 8. * k_eMoM * delx / 9. * A * M1,
+        M2_idx);
+
+      /*
+        Moment 1
+        dM1/dt = 8 * delx / 9 * [A] * k_eMoM * xM^1 * [q] + 1 * 8 * k_eMoM * delx / 9 * [A] * [M0]
+       */
+      lin_algebra->vectorInsert(x_dot,
+        8. * delx / 9. * A * k_eMoM * std::pow(xM, 1.0) * q + 1. * 8. * k_eMoM * delx / 9. * A * M0,
+        M1_idx);
+
+      /*
+        Moment 0
+        dM0/dt = 8 * delx / 9 * [A] * k_eMoM * xM^0 * [q] 
+       */
+      lin_algebra->vectorInsert(x_dot,
+        8. * delx / 9. * A * k_eMoM * q,
+        M0_idx);
       }
+      
       return 0;
     };
     return fcn;
@@ -570,7 +608,7 @@ namespace NanoSim{
 
 
 
-  // TODO use linear algebra system
+
   template<typename Real>
   std::function<int(Real, N_Vector, N_Vector, SUNMatrix, void *, N_Vector, N_Vector, N_Vector)>
   particleSystem<Real>::composeJacobianfunction() const
@@ -623,8 +661,187 @@ namespace NanoSim{
         }
       }
 
-      // TODO
-      // add eMoM if present!
+
+      // add in eMoM if present!
+      // FIXME (has_eMoM)
+      if (has_eMoM){
+        /*
+          Values used
+        */
+        const Real delx = std::get<4>(eMoM_info); 
+        const unsigned int M = std::get<1>(particle_info); // largest tracked cluster which flows into eMoM
+        const Real xM = delx * std::pow(1.0 * M, 1.0 / 3.0); // continuous diameter size of largest cluster
+        const Real k_inflow = std::get<2>(eMoM_info); // Growth rate of cluster of size M growing into eMoM
+        const Real k_eMoM   = std::get<3>(eMoM_info); // Growth rate of eMoM
+
+        const auto M_idx = species_to_index_map.find("__PARTICLE__" + std::to_string(M))->second;
+
+        /*
+          Concentrations
+        */
+        const auto A_idx = species_to_index_map.find(std::get<0>(eMoM_info))->second;
+        const auto A = lin_algebra->vectorGetValue(x, A_idx);
+
+        const auto M3_idx = species_to_index_map.find("__MOMENT3__")->second;
+        const auto M2_idx = species_to_index_map.find("__MOMENT2__")->second;
+        const auto M1_idx = species_to_index_map.find("__MOMENT1__")->second;
+        const auto M0_idx = species_to_index_map.find("__MOMENT0__")->second;
+
+        const auto M3 = lin_algebra->vectorGetValue(x, M3_idx);
+        const auto M2 = lin_algebra->vectorGetValue(x, M2_idx);
+        const auto M1 = lin_algebra->vectorGetValue(x, M1_idx);
+        const auto M0 = lin_algebra->vectorGetValue(x, M0_idx);
+
+        /*
+          Flux:
+          q = 3 * k_inflow * M^(2/3) * [BM] / delx / k_eMoM
+          Derivative
+          dq/dBM = 3 * k_inflow * M^(2/3) / delx / k_eMoM
+        */
+        const Real q = 3 * k_inflow * std::pow( M * 1.0, 2.0 / 3.0) * lin_algebra->vectorGetValue(x, M_idx) / delx / k_eMoM;
+        const Real dqdB = 3 * k_inflow * std::pow( M * 1.0, 2.0 / 3.0)  / delx / k_eMoM;
+
+        /*
+          Precursor contribution
+          dA/dt += -8*delx/9 * [A] * k_eMoM * xn^3 * q - k_eMoM * 8 / (delx^2 * 3) * [A] * [M2]
+          Derivatives
+          dA'/dA += -8*delx/9 * k_eMoM * xn^3 * q - k_eMoM * 8 / (delx^2 * 3) * [M2]
+          dA'/dBM += -8*delx/9 * k_eMoM * xn^3 * [A] * dq/dBM
+          dA'/dM2 += -k_eMoM / delx^2 * 8 / 3 * [A]
+        */
+        lin_algebra->matrixInsertAdd(Jacobian, 
+          -8. * delx / 9. * k_eMoM * std::pow(xM, 3.0) * q - k_eMoM * 8. / std::pow(delx, 2.0) / 3. * M2,
+          A_idx,
+          A_idx); // dA'/dA
+
+        lin_algebra->matrixInsertAdd(Jacobian,
+          -8. * delx / 9. * k_eMoM * std::pow(xM, 3.0) * A * dqdB,
+          A_idx,
+          M_idx); // dA'/dBM
+
+        lin_algebra->matrixInsertAdd(Jacobian,
+          -k_eMoM / std::pow(delx, 2.0) * 8. / 3. * A,
+          A_idx,
+          M2_idx); // dA'/dM2
+
+        /*
+          Products contribution
+          dP/dt += 8*delx/9 * [A] * k_eMoM * xn^3 * q + k_eMoM * 8 / (delx^2 * 3) * [A] * [M2]
+          Derivatives
+          dP'/dA += 8*delx/9 * k_eMoM * xn^3 * q + k_eMoM * 8 / (delx^2 * 3) * [M2]
+          dP'/dBM += 8*delx/9 * k_eMoM * xn^3 * [A] * dq/dBM
+          dP'/dM2 += k_eMoM / delx^2 * 8 / 3 * [A]
+        */
+        const auto products = std::get<1>(eMoM_info);
+        for (auto p : products){
+          const auto coeff = p.first;
+          const auto p_ID = p.second;
+          const auto p_idx = species_to_index_map.find(p_ID)->second;
+          lin_algebra->matrixInsertAdd(Jacobian, 
+            coeff * (8. * delx / 9. * k_eMoM * std::pow(xM, 3.0) * q + k_eMoM * 8. / std::pow(delx, 2.0) / 3. * M2),
+            p_idx,
+            A_idx); // dP'/dA
+
+          lin_algebra->matrixInsertAdd(Jacobian,
+            coeff * 8. * delx / 9. * k_eMoM * std::pow(xM, 3.0) * A * dqdB,
+            p_idx,
+            M_idx); // dP'/dBM
+
+          lin_algebra->matrixInsertAdd(Jacobian,
+            coeff * k_eMoM / std::pow(delx, 2.0) * 8. / 3. * A,
+            p_idx,
+            M2_idx); // dP'/dM2
+        }
+
+
+       /*
+        Moment 3
+        dM3/dt = 8 * delx / 9 * [A] * k_eMoM * xM^3 * [q] + 3 * 8 * k_eMoM * delx / 9 * [A] * [M2]
+        Derivatives
+        dM3'/dA = 8 * delx / 9 * k_eMoM * xM^3 * [q] + 3 * 8 * k_eMoM * delx / 9 * [M2]
+        dM3'/dBM = 8 * delx / 9 * [A] * k_eMoM * xM^3 * dqdB
+        dM3'/dM2 = 3 * 8 * k_eMoM * delx / 9 * [A]
+       */
+      lin_algebra->matrixInsert(Jacobian,
+        8. * delx / 9. * k_eMoM * std::pow(xM, 3.0) * q + 3. * 8. * k_eMoM * delx / 9. * M2,
+        M3_idx,
+        A_idx); // dM3'/dA
+
+      lin_algebra->matrixInsert(Jacobian,
+        8. * delx / 9. * A *  k_eMoM * std::pow(xM, 3.0) * dqdB,
+        M3_idx,
+        M_idx); // dM3'/dBM
+
+      lin_algebra->matrixInsert(Jacobian,
+        3. * 8. * k_eMoM * delx / 9. * A,
+        M3_idx,
+        M2_idx); // dM3'/dM2
+
+      /*
+        Moment 2
+        dM2/dt = 8 * delx / 9 * [A] * k_eMoM * xM^2 * [q] + 2 * 8 * k_eMoM * delx / 9 * [A] * [M1]
+        Derivatives
+        dM2'/dA = 8 * delx / 9 * k_eMoM * xM^2 * [q] + 2 * 8 * k_eMoM * delx / 9 * [M1]
+        dM2'/dBM = 8 * delx / 9 * [A] * k_eMoM * xM^2 * dqdB
+        dM2'/dM2 = 2 * 8 * k_eMoM * delx / 9 * [A]
+       */
+      lin_algebra->matrixInsert(Jacobian,
+        8. * delx / 9. * k_eMoM * std::pow(xM, 2.0) * q + 2. * 8. * k_eMoM * delx / 9. * M1,
+        M2_idx,
+        A_idx); // dM2'/dA
+
+      lin_algebra->matrixInsert(Jacobian,
+        8. * delx / 9. * A * k_eMoM * std::pow(xM, 2.0) * dqdB,
+        M2_idx,
+        M_idx); // dM2'/dBM
+
+      lin_algebra->matrixInsert(Jacobian,
+        2. * 8. * k_eMoM * delx / 9. * A,
+        M2_idx,
+        M1_idx); // dM2'/dM1
+
+      /*
+        Moment 1
+        dM1/dt = 8 * delx / 9 * [A] * k_eMoM * xM^1 * [q] + 1 * 8 * k_eMoM * delx / 9 * [A] * [M0]
+        Derivatives
+        dM1'/dA = 8 * delx / 9 * k_eMoM * xM^1 * [q] + 1 * 8 * k_eMoM * delx / 9 * [M0]
+        dM1'/dBM = 8 * delx / 9 * [A] * k_eMoM * xM^1 * dqdB
+        dM1'/dM0 = 1 * 8 * k_eMoM * delx / 9 * [A]
+       */
+      lin_algebra->matrixInsert(Jacobian,
+        8. * delx / 9. * k_eMoM * xM * q + 8. * k_eMoM * delx / 9. * M0,
+        M1_idx,
+        A_idx); // dM1'/dA
+
+      lin_algebra->matrixInsert(Jacobian,
+        8. * delx / 9. * A * k_eMoM * xM * dqdB,
+        M1_idx,
+        M_idx); // dM1'/dBM
+
+      lin_algebra->matrixInsert(Jacobian,
+        8. * k_eMoM * delx / 9. * A,
+        M1_idx,
+        M0_idx); // dM1'/dM0
+
+      /*
+        Moment 0
+        dM0/dt = 8 * delx / 9 * [A] * k_eMoM * xM^0 * [q] 
+        Derivatives
+        dM0'/dA = 8 * delx / 9 * k_eMoM * xM^0 * [q] 
+        dM0'/dBM = 8 * delx / 9 * [A] * k_eMoM * xM^0 * dqdB
+       */
+      lin_algebra->matrixInsert(Jacobian,
+        8. * delx / 9. * k_eMoM * q,
+        M0_idx,
+        A_idx); // dM0'/dA
+
+      lin_algebra->matrixInsert(Jacobian,
+        8. * delx / 9. * A * k_eMoM * dqdB,
+        M0_idx,
+        M_idx); // dM0'/dBM
+        
+
+      }
 
       return 0;
     };

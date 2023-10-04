@@ -7,6 +7,12 @@ set (CMAKE_CXX_STANDARD 20)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_CXX_EXTENSIONS OFF)
 
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+if(COMPILER_SUPPORTS_MARCH_NATIVE)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+endif()
+
 
 #########################################
 ### Find the SUNDIALS library
@@ -68,14 +74,51 @@ INCLUDE_DIRECTORIES(${EIGEN_DIR})
 
 
 
-#########################################
-### Add optimlib for optimization
+# #########################################
+# ### Add optimlib for optimization
 if(NOT DEFINED OPTIMLIB_DIR)
   message(FATAL_ERROR
     "Provide the path to the folder containing 'optim.hpp' with '-DOPTIMLIB_DIR=/path/to/optimlib/')")
 endif()
 include_directories(${OPTIMLIB_DIR})
 
+##################
+### MUQ for uncertainty quantification
+FIND_PACKAGE (
+        _muq
+        NAMES MUQ
+        HINTS ${MUQ_DIR} 
+        REQUIRED
+)
+IF ("${_muq}" STREQUAL "_muq-NOTFOUND")
+  MESSAGE(FATAL_ERROR
+          "The MUQ library was not found. You have to specify a path "
+          "to that library by setting the MUQ_DIR environment variable, "
+          "or by passing '-DMUQ_DIR=...' as an argument to 'cmake'.")
+ELSE()
+  MESSAGE(STATUS "Found MUQ")
+  include_directories(${MUQ_INCLUDE_DIRS})
+  MESSAGE(STATUS "Include MUQ directories: ${MUQ_INCLUDE_DIRS}")
+ENDIF()
+
+
+MESSAGE(STATUS "MUQ libraries: ${MUQ_LIBRARIES}")
+MESSAGE(STATUS "MUQ link libraries: ${MUQ_LINK_LIBRARIES}")
+
+
+#########################################
+### Add Boost library
+find_package(Boost REQUIRED)
+if (Boost_FOUND)
+  include_directories(${Boost_INCLUDE_DIRS})
+  message(STATUS "Found Boost include directories at ${Boost_INCLUDE_DIRS}.")
+  message(STATUS "Found Boost libraries at ${Boost_LIBRARY_DIRS}.")
+  message(STATUS "Including libraries: ${Boost_LIBRARIES}.")
+
+else ()
+  message(FATAL_ERROR
+    "Boost was not found. Install Boost, ensure it can be found in your PATH variable, and try again.")
+endif ()
 
 ###################
 ## Find include files in this project
@@ -88,9 +131,27 @@ target_include_directories(libNanoSim
     INTERFACE 
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(libNanoSim
+find_package(OpenMP)
+if (OpenMP_CXX_FOUND)
+  message(STATUS Found OpenMP)
+  target_link_libraries(libNanoSim
+      INTERFACE
+      ${_sundials_cvode_lib}
+      ${Boost_LIBRARIES}
+      ${MUQ_LIBRARIES}
+      ${MUQ_LINK_LIBRARIES}
+      OpenMP::OpenMP_CXX)
+else ()
+  target_link_libraries(libNanoSim
     INTERFACE
-    ${_sundials_cvode_lib})
+    ${_sundials_cvode_lib}
+    ${Boost_LIBRARIES}
+    ${MUQ_LIBRARIES}
+    ${MUQ_LINK_LIBRARIES})
+endif()
+
+
+
 
 ###################
 ## Set up the test suite machinery
@@ -100,3 +161,4 @@ add_subdirectory(tests)
 ###################
 ## Add the tutorial programs
 add_subdirectory(tutorial)
+add_subdirectory(code_gallery)
