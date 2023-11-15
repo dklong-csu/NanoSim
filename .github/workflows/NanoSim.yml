@@ -28,7 +28,7 @@ jobs:
         cd ./build
         cmake ../
         sudo make install
-        cd ../../
+        cd ../../../
         # Install plotting library
         git clone https://github.com/alandefreitas/matplotplusplus/
         cd matplotplusplus
