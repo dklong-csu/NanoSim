@@ -28,8 +28,9 @@ jobs:
         cd ./build
         cmake ../
         cd ../../
-        git clone https://github.com/alandefreitas/matplotplusplus/
+        sudo make install
         # Install plotting library
+        git clone https://github.com/alandefreitas/matplotplusplus/
         cd matplotplusplus
         cmake --preset=system
         cmake --build --preset=system
@@ -49,7 +50,6 @@ jobs:
         tar -xvf eigen-3.4.0.tar.gz
         mv eigen-3.4.0 eigen/
         cd ../
-        sudo make install
     - name: cmake
       run: cmake -DCMAKE_BUILD_TYPE=release .
     - name: build
