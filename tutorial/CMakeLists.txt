@@ -25,7 +25,7 @@ add_executable(step05
 target_link_libraries(step05
   libNanoSim)
 
-add_executable(step06
-  step06-fullVSreduced.cpp)
-target_link_libraries(step06
-  libNanoSim)
+# add_executable(step06
+#   step06-fullVSreduced.cpp)
+# target_link_libraries(step06
+#   libNanoSim)
