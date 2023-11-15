@@ -18,18 +18,42 @@ jobs:
       run: |
         sudo apt-get install --fix-missing doxygen graphviz libboost-all-dev numdiff -y
         doxygen --version
+        # Install ODE solve library
         mkdir sundials
         cd ./sundials
-        wget https://github.com/LLNL/sundials/releases/download/v5.7.0/sundials-5.7.0.tar.gz
-        tar zxf sundials-5.7.0.tar.gz
-        cd sundials-5.7.0
+        wget https://github.com/LLNL/sundials/releases/download/v6.6.2/sundials-6.6.2.tar.gz
+        tar zxf sundials-6.6.2.tar.gz
+        cd sundials-6.6.2
         mkdir ./build
-        mkdir ./install
         cd ./build
-        cmake ../ -DCMAKE_INSTALL_PREFIX=../install
-        make install
+        cmake ../
+        sudo make install
+        cd ../../../
+        # Install plotting library
+        git clone https://github.com/alandefreitas/matplotplusplus/
+        cd matplotplusplus
+        cmake --preset=system
+        cmake --build --preset=system
+        sudo cmake --install build/system
+        # NLOPT install
+        cd ../
+        mkdir nlopt
+        cd nlopt
+        wget https://github.com/stevengj/nlopt/archive/v2.7.1.tar.gz
+        tar -xvf v2.7.1.tar.gz
+        cd nlopt-2.7.1
+        cmake . && make && sudo make install
+        cd ../../
+        # install eigen
+        pwd
+        ls
+        cd lib
+        wget https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+        tar -xvf eigen-3.4.0.tar.gz
+        mv eigen-3.4.0 eigen/
+        cd ../
     - name: cmake
-      run: cmake -DSUNDIALS_DIR="$PWD/sundials/sundials-5.7.0/install" -DCMAKE_BUILD_TYPE=release .
+      run: cmake -DCMAKE_BUILD_TYPE=release .
     - name: build
       run: make
     - name: ctest

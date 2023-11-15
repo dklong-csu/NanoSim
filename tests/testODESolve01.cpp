@@ -1,20 +1,18 @@
 // Tests that the ODE solver is working properly
 
 #include "particleSystem.h"
-#include "linearAlgebraSUNDense.h"
+#include "linearAlgebraEigen.h"
+#include "linearSolverEigen.h"
 #include "odeSolver.h"
-
-#include <sundials/sundials_nvector.h>
-#include <nvector/nvector_serial.h>
-#include <sundials/sundials_types.h>
-#include <sunmatrix/sunmatrix_dense.h>
-#include <sunlinsol/sunlinsol_dense.h>
 
 #include <iostream>
 #include <iomanip>
 
+using EigenMatrix = Eigen::Matrix<realtype, Eigen::Dynamic, Eigen::Dynamic>;
+using SolverType = Eigen::PartialPivLU< EigenMatrix >;
 int main(){
   NanoSim::particleSystem<double> my_rxns;
+  NanoSim::eigenLinearAlgebraOperations<realtype, EigenMatrix> lin_alg;
 
   /* 
     Do reaction:
@@ -30,24 +28,22 @@ int main(){
 
   my_rxns.finalizeReactions();
 
-  N_Vector ic;
-  NanoSim::sunDenseLinearAlgebraOperations<realtype> lin_alg;
   const sunindextype length = my_rxns.getNumberOfSpecies();
-  ic = N_VNew_Serial(length);
+
+  N_Vector ic = lin_alg.createNewVector(length);
   lin_alg.vectorInsert(ic, 1.0, 0);
   lin_alg.vectorInsert(ic, 0.0, 1);
-  // for (sunindextype i=0;i<length;++i){
-  //   lin_alg.vectorInsert(ic,1.0*(i+1),i);
-  // }
 
-  SUNMatrix template_matrix = SUNDenseMatrix(length,length);
 
-  SUNLinearSolver lin_solve = SUNLinSol_Dense(ic, template_matrix);
+  SUNMatrix template_matrix = lin_alg.createNewMatrix(length,length);
+
+  SUNLinearSolver lin_solve = NanoSim::createLinearSolverEigenDense<realtype, SolverType>();
 
   NanoSim::cvodeOptions<realtype> opts("SUNDIALS_errors.txt",
     1e-8,
     1e-14,
     1000,
+    CV_ADAMS,
     SUNFALSE);
   auto cvode_mem = NanoSim::prepareODESolver<realtype>(ic, 
     template_matrix, 

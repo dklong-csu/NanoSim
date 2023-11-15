@@ -41,28 +41,46 @@ namespace NanoSim{
 
 
   template<typename Real>
+  int sparse_jacobian_function(Real time, N_Vector x, N_Vector x_dot, SUNMatrix Jacobian, void * user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3){
+    std::pair< NanoSim::particleSystem<Real>*, abstractLinearAlgebraOperations<Real>* >*
+    data_pair = static_cast< std::pair< NanoSim::particleSystem<Real>*, abstractLinearAlgebraOperations<Real>* >* >(user_data);
+    auto rxn = data_pair->first;
+    auto lin_alg = data_pair->second;
+
+    void * jac_data = static_cast<void *>(lin_alg);
+    auto jac = rxn->composeSparseJacobianfunction();
+    
+    return jac(time, x, x_dot, Jacobian, jac_data, tmp1, tmp2, tmp3);
+  }
+
+
+
+  template<typename Real>
   struct cvodeOptions
   {
     cvodeOptions(std::string error_filename = "SUNDIALS_errors.txt",
       Real rtol = 1e-8,
       Real atol = 1e-14,
       long int max_steps = 1000,
+      int Method = CV_BDF,
       booleantype detect_bdf_stab = SUNTRUE)
       : rtol(rtol), 
         atol(atol), 
         max_steps(max_steps), 
+        Method(Method),
         detect_bdf_stab(detect_bdf_stab) {
         err_file = fopen(error_filename.c_str(),"w");
     }
 
     ~cvodeOptions(){
-      //fclose(err_file);
+      fclose(err_file);
     }
 
     FILE* err_file;
     Real rtol;
     Real atol;
     long int max_steps;
+    int Method; // CV_BDF or CV_ADAMS
     booleantype detect_bdf_stab;
   };
   
@@ -74,8 +92,9 @@ namespace NanoSim{
   prepareODESolver(N_Vector initial_condition,
     SUNMatrix template_matrix,
     SUNLinearSolver linear_solver,
-    cvodeOptions<Real> opts){
-      void * cvode_memory = CVodeCreate(CV_BDF);
+    cvodeOptions<Real> & opts){
+      sundials::Context cntxt;
+      void * cvode_memory = CVodeCreate(opts.Method, cntxt);
 
       auto flag = CVodeInit(cvode_memory, rhs_function<Real>, 0.0, initial_condition);
 

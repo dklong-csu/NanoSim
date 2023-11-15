@@ -1,4 +1,4 @@
-CMAKE_MINIMUM_REQUIRED (VERSION 3.1)
+CMAKE_MINIMUM_REQUIRED (VERSION 3.1...3.27)
 PROJECT (NanoSim CXX)
 
 ###################
@@ -7,57 +7,35 @@ set (CMAKE_CXX_STANDARD 20)
 set (CMAKE_CXX_STANDARD_REQUIRED ON)
 set (CMAKE_CXX_EXTENSIONS OFF)
 
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-march=native" COMPILER_SUPPORTS_MARCH_NATIVE)
+if(COMPILER_SUPPORTS_MARCH_NATIVE)
+  message(STATUS Using -march=native)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=native")
+endif()
+
 
 #########################################
 ### Find the SUNDIALS library
-FIND_PACKAGE (
-        _sundials
-        NAMES SUNDIALS
-        HINTS ${SUNDIALS_DIR} 
-        REQUIRED
-)
-IF ("${_sundials}" STREQUAL "_sundials-NOTFOUND")
-  MESSAGE(FATAL_ERROR
-          "The SUNDIALS library was not found. You have to specify a path "
-          "to that library by setting the SUNDIALS_DIR environment variable, "
-          "or by passing '-DSUNDIALS_DIR=...' as an argument to 'cmake'.")
-ELSE()
-  MESSAGE(STATUS "Found SUNDIALS")
-ENDIF()
+find_package(SUNDIALS REQUIRED)
+find_package(Matplot++ REQUIRED)
+find_package(Boost REQUIRED)
+if(Boost_FOUND)
+  include_directories(${Boost_INCLUDE_DIRS})
+endif()
 
 
-FIND_PATH(_sundials_include_dir
-        NAMES cvode/cvode.h
-        HINTS ${SUNDIALS_DIR}/include)
-IF ("${_sundials_include_dir}" STREQUAL "_sundials_include_dir-NOTFOUND")
-  MESSAGE(FATAL_ERROR
-          "The SUNDIALS headers were not found. You have to specify a path "
-          "to that library by setting the SUNDIALS_DIR environment variable, "
-          "or by passing '-DSUNDIALS_DIR=...' as an argument to 'cmake'.")
-ELSE()
-  MESSAGE(STATUS "Found SUNDIALS headers at ${_sundials_include_dir}")
-  INCLUDE_DIRECTORIES(${_sundials_include_dir})
-ENDIF()
+###################
+## Optimization library
 
 
-FIND_LIBRARY(_sundials_cvode_lib
-        NAMES sundials_cvode
-        HINTS ${SUNDIALS_DIR}/lib)
-IF ("${_sundials_cvode_lib}" STREQUAL "_sundials_cvode_lib-NOTFOUND")
-  MESSAGE(FATAL_ERROR
-          "The SUNDIALS CVODE library was not found. You have to specify a path "
-          "to that library by setting the SUNDIALS_DIR environment variable, "
-          "or by passing '-DSUNDIALS_DIR=...' as an argument to 'cmake'.")
-ELSE()
-  MESSAGE(STATUS "Found SUNDIALS CVODE library at ${_sundials_CVode_lib}")
-  INCLUDE_DIRECTORIES(${_sundials_include_dir})
-  LINK_DIRECTORIES(${SUNDIALS_DIR}/lib)
-ENDIF()
+
+
 
 
 ###################
 ## Find include files in this project
-INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/lib)
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/lib ${CMAKE_CURRENT_SOURCE_DIR}/lib/eigen)
 
 ###################
 ## Define interface library to tells executable how to compile properly
@@ -66,11 +44,30 @@ target_include_directories(libNanoSim
     INTERFACE 
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-target_link_libraries(libNanoSim
+find_package(OpenMP)
+if (OpenMP_CXX_FOUND)
+  message(STATUS Found OpenMP)
+  target_link_libraries(libNanoSim
+      INTERFACE
+      SUNDIALS::cvode
+      OpenMP::OpenMP_CXX
+      Matplot++::matplot
+      -lnlopt -lm)
+else ()
+  target_link_libraries(libNanoSim
     INTERFACE
-    ${_sundials_cvode_lib})
+    SUNDIALS::cvode)
+endif()
+
+
+
 
 ###################
 ## Set up the test suite machinery
 enable_testing()
 add_subdirectory(tests)
+
+###################
+## Add the tutorial programs
+add_subdirectory(tutorial)
+add_subdirectory(examples)

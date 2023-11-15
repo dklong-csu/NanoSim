@@ -3,19 +3,20 @@ Tests that adding a single reaction constructs the intended reaction and ODE sys
 */
 
 #include "particleSystem.h"
-#include "linearAlgebraSUNDense.h"
+#include "linearAlgebraEigen.h"
 #include "testingUtilities.h"
-
-#include <sundials/sundials_nvector.h>
-#include <nvector/nvector_serial.h>
-#include <sundials/sundials_types.h>
-#include <sunmatrix/sunmatrix_dense.h>
 #include <iostream>
+
+using EigenMatrix = Eigen::Matrix<realtype, Eigen::Dynamic, Eigen::Dynamic>;
 
 int main(){
   NanoSim::particleSystem<double> my_rxns;
+  NanoSim::eigenLinearAlgebraOperations<realtype, EigenMatrix> lin_alg;
 
-  my_rxns.defineParticle(1,6,3);
+  std::function<realtype(const int)> atoms2diameter 
+    = [](const int atoms){ return 0.3 * std::cbrt(1.0*atoms);};
+
+  my_rxns.defineParticle(1,6, atoms2diameter);
 
   my_rxns.addReaction({{2,"A"}, {3,"B"}},
   {{4,"C"}},
@@ -32,19 +33,21 @@ int main(){
 
   const std::function<realtype(const unsigned int, const unsigned int)> agglom_kernel 
   = [](const unsigned int i, const unsigned int j){
-    return 5.0 * i * j;
+    if (i > 3 || j > 3){
+      return 0.0;
+    } else {
+      return 5.0 * i * j;
+    }
   };
   my_rxns.addAgglomeration({},{},agglom_kernel);
 
   my_rxns.finalizeReactions();
 
-  N_Vector x, x_dot, tmp1, tmp2, tmp3;
   sunindextype length = 9;
 
-  x = N_VNew_Serial(length);
-  x_dot = N_VNew_Serial(length);
+  N_Vector x = lin_alg.createNewVector(length);
+  N_Vector x_dot = lin_alg.createNewVector(length);
 
-  NanoSim::sunDenseLinearAlgebraOperations<realtype> lin_alg;
   for (unsigned int i=0; i<length;++i){
     lin_alg.vectorInsert(x,i+2.0,i);
   }
@@ -56,11 +59,12 @@ int main(){
 
   const auto jac_fcn = my_rxns.composeJacobianfunction();
  
-  tmp1 = N_VNew_Serial(length);
-  tmp2 = N_VNew_Serial(length);
-  tmp3 = N_VNew_Serial(length);
+  N_Vector tmp1 = lin_alg.createNewVector(length);
+  N_Vector tmp2 = lin_alg.createNewVector(length);
+  N_Vector tmp3 = lin_alg.createNewVector(length);
 
-  SUNMatrix J = SUNDenseMatrix(length,length);
+  SUNMatrix J = lin_alg.createNewMatrix(length,length);
+
   const int errJ = jac_fcn(0.0, x, x_dot, J, user_data, tmp1, tmp2, tmp3);
 
   NanoSim::Testing::printParticleSystemOutput<realtype>(my_rxns, x, x_dot, J, lin_alg);
