@@ -43,6 +43,7 @@ int main(){
     1e-8,
     1e-14,
     1000,
+    CV_ADAMS,
     SUNFALSE);
   auto cvode_mem = NanoSim::prepareODESolver<realtype>(ic, 
     template_matrix, 

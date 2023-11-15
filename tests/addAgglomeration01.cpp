@@ -15,10 +15,17 @@ int main(){
   NanoSim::particleSystem<realtype> my_rxns;
   NanoSim::eigenLinearAlgebraOperations<realtype, EigenMatrix> lin_alg;
 
-  my_rxns.defineParticle(1,6,3);
+  std::function<realtype(const int)> atoms2diameter 
+    = [](const int atoms){ return 0.3 * std::cbrt(1.0*atoms);};
+
+  my_rxns.defineParticle(1,6, atoms2diameter);
   const std::function<realtype(const unsigned int, const unsigned int)> agglom_kernel 
   = [](const unsigned int i, const unsigned int j){
-    return 5.0 * i * j;
+    if (i > 3 || j > 3){
+      return 0.0;
+    } else {
+      return 5.0 * i * j;
+    }
   };
   my_rxns.addAgglomeration({},{},agglom_kernel);
 

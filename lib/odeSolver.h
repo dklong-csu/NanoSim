@@ -62,10 +62,12 @@ namespace NanoSim{
       Real rtol = 1e-8,
       Real atol = 1e-14,
       long int max_steps = 1000,
+      int Method = CV_BDF,
       booleantype detect_bdf_stab = SUNTRUE)
       : rtol(rtol), 
         atol(atol), 
         max_steps(max_steps), 
+        Method(Method),
         detect_bdf_stab(detect_bdf_stab) {
         err_file = fopen(error_filename.c_str(),"w");
     }
@@ -78,6 +80,7 @@ namespace NanoSim{
     Real rtol;
     Real atol;
     long int max_steps;
+    int Method; // CV_BDF or CV_ADAMS
     booleantype detect_bdf_stab;
   };
   
@@ -91,7 +94,7 @@ namespace NanoSim{
     SUNLinearSolver linear_solver,
     cvodeOptions<Real> & opts){
       sundials::Context cntxt;
-      void * cvode_memory = CVodeCreate(CV_BDF, cntxt);
+      void * cvode_memory = CVodeCreate(opts.Method, cntxt);
 
       auto flag = CVodeInit(cvode_memory, rhs_function<Real>, 0.0, initial_condition);
 

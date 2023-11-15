@@ -17,7 +17,9 @@ int main(){
     Nucleation is
     2A ->[2] B_2 + C
   */
-  my_rxns.defineParticle(2,3,3);
+ std::function<realtype(const int)> atoms2diameter 
+    = [](const int atoms){ return 0.3 * std::cbrt(1.0*atoms);};
+  my_rxns.defineParticle(2,3, atoms2diameter);
   my_rxns.addNucleation({{2,"A"}},
     {{1,"C"}},
     2.0);

@@ -13,10 +13,14 @@ int main(){
   NanoSim::particleSystem<realtype> my_rxns;
   NanoSim::eigenLinearAlgebraOperations<realtype, EigenMatrix> lin_alg;
 
-  my_rxns.defineParticle(1,3,3);
+  std::function<realtype(const int)> atoms2diameter 
+    = [](const int atoms){ return 0.3 * std::cbrt(1.0*atoms);};
+
+  my_rxns.defineParticle(1,3, atoms2diameter);
   const std::function<realtype(const unsigned int)> growth_kernel = [](const unsigned int i){
     return 5.0 * i;
   };
+
   my_rxns.addGrowth({{1,"A"}},{},growth_kernel);
 
   my_rxns.finalizeReactions();
