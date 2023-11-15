@@ -28,7 +28,7 @@ jobs:
         cd ./build
         # cmake ../ -DCMAKE_INSTALL_PREFIX=../install
         cmake ../
-        make install
+        sudo make install
     - name: cmake
       run: cmake -DSUNDIALS_DIR="$PWD/sundials/sundials-5.7.0/install" -DCMAKE_BUILD_TYPE=release .
     - name: build
