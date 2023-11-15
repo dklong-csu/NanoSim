@@ -42,7 +42,13 @@ jobs:
         tar -xvf v2.7.1.tar.gz
         cd nlopt-2.7.1
         cmake . && make && sudo make install
+        cd ../../
         # install eigen
+        cd lib
+        wget https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz
+        tar -xvf eigen-3.4.0.tar.gz
+        mv eigen-3.4.0 eigen/
+        cd ../
         sudo make install
     - name: cmake
       run: cmake -DCMAKE_BUILD_TYPE=release .
