@@ -3,6 +3,11 @@ clear variables
 close all
 
 %%
+%   If you get an error that says you aren't finding the right GLIBCXX the
+%   run the following in the terminal before launching Matlab:
+%       export LD_PRELOAD=/lib/x86_64-linux-gnu/libstdc++.so.6
+
+%%
 settings.executable = "./GoldParticleSimulation";
 settings.inp_file = "params.txt";
 settings.diameter_file = "diams.txt";
