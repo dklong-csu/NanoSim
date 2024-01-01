@@ -14,9 +14,9 @@ settings.diameter_file = "diams.txt";
 settings.density_file = "density.txt";
 settings.verbose = true;
 
-model_prms = [8.54958e+06
-0.5
-0.01];
+model_prms = [9.999997e+07
+3.881126e-01
+3.956051e-01];
 
 [d,q] = simulatePSDs(model_prms,settings);
 
