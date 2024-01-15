@@ -556,21 +556,11 @@ namespace NanoSim{
       for (const auto & r : reactants){
         const auto key = r.second;
         addSpeciesToMap(key);
-        // if (!species_to_index_map.contains(r.second)){
-        //   // A normal chemical species does not have a particle diameter, so set it to zero
-        //   species_to_index_map[r.second] = {n_species, 0.0};
-        //   n_species += 1; // Vector indexes from 0 so increment after
-        // }
       }
 
       for (const auto & p : products){
         const auto key = p.second;
         addSpeciesToMap(key);
-        // if (!species_to_index_map.contains(p.second)){
-        //   // A normal chemical species does not have a particle diameter, so set it to zero
-        //   species_to_index_map[p.second] = {n_species, 0.0};
-        //   n_species += 1; // Vector indexes from 0 so increment after
-        // }
       }
     }
 
@@ -582,21 +572,11 @@ namespace NanoSim{
       for (const auto & r : reactants){
         const auto key = r.second;
         addSpeciesToMap(key);
-        // if (!species_to_index_map.contains(r.second)){
-        //   // A normal chemical species does not have a particle diameter, so set it to zero
-        //   species_to_index_map[r.second] = {n_species, 0.0};
-        //   n_species += 1; // Vector indexes from 0 so increment after
-        // }
       }
 
       for (const auto & p : products){
         const auto key = p.second;
         addSpeciesToMap(key);
-        // if (!species_to_index_map.contains(p.second)){
-        //   // A normal chemical species does not have a particle diameter, so set it to zero
-        //   species_to_index_map[p.second] = {n_species, 0.0};
-        //   n_species += 1; // Vector indexes from 0 so increment after
-        // }
       }
     }
 
@@ -606,20 +586,10 @@ namespace NanoSim{
       auto precursor = std::get<0>(eMoM_info);
       auto products = std::get<1>(eMoM_info);
       addSpeciesToMap(precursor);
-      // if (!species_to_index_map.contains(precursor)){
-      //   // A normal chemical species does not have a particle diameter, so set it to zero
-      //   species_to_index_map[precursor] = {n_species, 0.0};
-      //   n_species += 1;
-      // }
 
       for (const auto & p : products){
         const auto key = p.second;
         addSpeciesToMap(key);
-        // if (!species_to_index_map.contains(p.second)){
-        //   // A normal chemical species does not have a particle diameter, so set it to zero
-        //   species_to_index_map[p.second] = {n_species, 0.0};
-        //   n_species += 1; // Vector indexes from 0 so increment after
-        // }
       }
 
       // Add in "species" for the moments that eMoM models
@@ -741,14 +711,14 @@ namespace NanoSim{
 
           // FIXME
           const Real N = species_to_index_map[bin_key].n_binned_particles;
-          const Real weight1 = (N-1)/N; // percentage of reactions that remain in same bin
+          const Real weight1 = (N-1.0)/N; // percentage of reactions that remain in same bin
           const Real weight2 = 1.0/N; // percentage of reactions that go to next bin
 
           if (weight1 > 0){
-            products.push_back({weight1, bin_key}); // FIXME --> times weight1
+            products.push_back({weight1, bin_key}); 
           } 
 
-          products.push_back( {weight2, next_bin_key} ); // FIXME --> times weight2
+          products.push_back( {weight2, next_bin_key} ); 
 
           // Binned particle acts like average size
           const auto min_size = species_to_index_map[bin_key].smallest_size;
@@ -760,7 +730,6 @@ namespace NanoSim{
           const auto reaction_rate = reaction_rate_fcn(avg_size);
           addReaction(reactants, products, reaction_rate);
         }
-        // std::cout << "done!\n";
       }
 
       // Construct individual reactions for particle agglomeration
@@ -807,6 +776,22 @@ namespace NanoSim{
             const Real reaction_rate = reaction_rate_function(avg_size_bin1, avg_size_bin2);
 
             if (reaction_rate > 0){
+              // -------------------------------------------------------------------------
+              //  Binning algorithm
+              //    - Start with the bigger bin between Bin I and Bin J (because can't create a particle smaller than the larger of the two bins)
+              //    - Bin K = max(Bin I, Bin J)
+              //    - Created particles = [min(Bin I) + min(Bin J), max(Bin I) + max(Bin J)] = [lo, hi]
+              //    - N = size(Bin I), M = size(Bin J)
+              //    - Slope up = [lo, lo + min(N,M) - 1] = [sup1, sup2]
+              //    - Slope down = [hi - min(N,M) + 1, hi] = [sdown1, sdown2]
+              //    - 
+              //    - Total created = |Bin I| * |Bin J|
+              //    - check bin = Bin K
+              //    - working bin = [lo, hi]
+              //    - while checking bins
+              //      - in check bin = [lo, min( hi, max(check bin) )] = [a, b]
+              //      - in slope up = []
+              // -------------------------------------------------------------------------
               for (unsigned int size1=smallest_bin1; size1<smallest_bin1+N_bin1;++size1){
                 int size2 = smallest_bin2;
                 const int max_size2 = smallest_bin2+N_bin2-1;
